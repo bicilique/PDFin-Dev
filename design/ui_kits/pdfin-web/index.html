@@ -1,0 +1,40 @@
+<!-- @dsCard group="PDFin Web" viewport="1280x800" subtitle="Homepage + Merge tool workspace — interactive, bilingual, dark mode" name="PDFin Web app" -->
+<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="utf-8">
+<title>PDFin Web — UI kit</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel" src="Chrome.jsx"></script>
+<script type="text/babel" src="HomeScreen.jsx"></script>
+<script type="text/babel" src="MergeScreen.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const [lang, setLang] = React.useState("id");
+  const [theme, setTheme] = React.useState("light");
+  const [screen, setScreen] = React.useState("home"); // home | merge
+  React.useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("lang", lang);
+  }, [theme, lang]);
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--surface-page)" }}>
+      <window.Header lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} onHome={() => setScreen("home")} />
+      <div style={{ flex: 1 }} data-screen-label={screen === "home" ? "Homepage" : "Merge tool"}>
+        {screen === "home"
+          ? <window.HomeScreen lang={lang} onOpenMerge={() => setScreen("merge")} />
+          : <window.MergeScreen lang={lang} />}
+      </div>
+      <window.Footer lang={lang} />
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body></html>

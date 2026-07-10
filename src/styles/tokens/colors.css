@@ -1,0 +1,142 @@
+/* PDFin color system — derived from the PDFin "P" mark (violet gradient + cyan) */
+
+:root {
+  /* ---- Base scales ---- */
+  /* Violet (primary — the top of the P) */
+  --violet-050: #F3EFFC;
+  --violet-100: #E6DDF9;
+  --violet-200: #CBB8F2;
+  --violet-300: #A987E8;
+  --violet-400: #8657DC;
+  --violet-500: #6B33CE;
+  --violet-600: #5518B4;  /* logo mid violet */
+  --violet-700: #45109A;
+  --violet-800: #370C7C;  /* logo deep violet */
+  --violet-900: #26085A;
+
+  /* Cyan (accent — the bowl of the P) */
+  --cyan-050: #E8FBFC;
+  --cyan-100: #CDF6F8;
+  --cyan-200: #99EDF1;
+  --cyan-300: #4FDEE6;
+  --cyan-400: #23CDD8;  /* logo cyan */
+  --cyan-500: #12AEBD;
+  --cyan-600: #128FA6;  /* logo petrol blue */
+  --cyan-700: #0F7086;
+  --cyan-800: #0C556A;
+  --cyan-900: #093D4E;
+
+  /* Ink (cool neutrals, violet-cast) */
+  --ink-000: #FFFFFF;
+  --ink-050: #F8F7FB;
+  --ink-100: #F1EFF6;
+  --ink-200: #E4E1ED;
+  --ink-300: #CBC7D8;
+  --ink-400: #A29DB5;
+  --ink-500: #767090;
+  --ink-600: #575170;
+  --ink-700: #403A55;
+  --ink-800: #2B2740;
+  --ink-900: #1B1730;
+  --ink-950: #120F22;
+
+  /* Semantic status */
+  --green-100: #DCF5E7;
+  --green-600: #178A50;
+  --green-700: #106B3D;
+  --amber-100: #FCF1D8;
+  --amber-600: #A96A0A;
+  --amber-700: #855307;
+  --red-100: #FBE4E4;
+  --red-600: #C6383B;
+  --red-700: #A22629;
+
+  /* ---- Semantic aliases (light theme) ---- */
+  --surface-page: var(--ink-050);
+  --surface-card: var(--ink-000);
+  --surface-raised: var(--ink-000);
+  --surface-sunken: var(--ink-100);
+  --surface-inverse: var(--ink-900);
+  --surface-brand-subtle: var(--violet-050);
+  --surface-accent-subtle: var(--cyan-050);
+
+  --text-heading: var(--ink-900);
+  --text-body: var(--ink-700);
+  --text-muted: var(--ink-500);
+  --text-faint: var(--ink-400);
+  --text-inverse: #FFFFFF;
+  --text-brand: var(--violet-600);
+  --text-link: var(--violet-600);
+  --text-link-hover: var(--violet-700);
+
+  --border-default: var(--ink-200);
+  --border-strong: var(--ink-300);
+  --border-brand: var(--violet-300);
+  --border-focus: var(--violet-500);
+
+  --action-primary: var(--violet-600);
+  --action-primary-hover: var(--violet-700);
+  --action-primary-active: var(--violet-800);
+  --action-accent: var(--cyan-500);
+  --action-accent-hover: var(--cyan-600);
+
+  --status-success-bg: var(--green-100);
+  --status-success-fg: var(--green-700);
+  --status-warning-bg: var(--amber-100);
+  --status-warning-fg: var(--amber-700);
+  --status-error-bg: var(--red-100);
+  --status-error-fg: var(--red-700);
+  --status-info-bg: var(--cyan-050);
+  --status-info-fg: var(--cyan-700);
+
+  /* Brand gradient — mirrors the logo mark */
+  --gradient-brand: linear-gradient(135deg, #370C7C 0%, #5518B4 55%, #23CDD8 130%); /* @kind color */
+  --gradient-brand-soft: linear-gradient(135deg, var(--violet-050) 0%, var(--cyan-050) 100%);
+
+  /* Privacy accent — the trust color used on privacy pills/notices */
+  --privacy-bg: var(--cyan-050);
+  --privacy-fg: var(--cyan-700);
+  --privacy-border: var(--cyan-200);
+}
+
+/* ---- Dark theme ---- */
+[data-theme="dark"] {
+  --surface-page: var(--ink-950);
+  --surface-card: var(--ink-900);
+  --surface-raised: var(--ink-800);
+  --surface-sunken: #0D0A1A;
+  --surface-inverse: var(--ink-050);
+  --surface-brand-subtle: #241344;
+  --surface-accent-subtle: #0C2A33;
+
+  --text-heading: var(--ink-050);
+  --text-body: var(--ink-200);
+  --text-muted: var(--ink-400);
+  --text-faint: var(--ink-500);
+  --text-inverse: var(--ink-900);
+  --text-brand: var(--violet-300);
+  --text-link: var(--violet-300);
+  --text-link-hover: var(--violet-200);
+
+  --border-default: #35304C;
+  --border-strong: #454060;
+  --border-brand: var(--violet-500);
+  --border-focus: var(--violet-400);
+
+  --action-primary: var(--violet-500);
+  --action-primary-hover: var(--violet-400);
+  --action-primary-active: var(--violet-300);
+
+  --status-success-bg: #10331F;
+  --status-success-fg: #6FD9A0;
+  --status-warning-bg: #3A2B0B;
+  --status-warning-fg: #EBBB63;
+  --status-error-bg: #3D1414;
+  --status-error-fg: #F09A9C;
+  --status-info-bg: #0C2A33;
+  --status-info-fg: #64D5E0;
+
+  --privacy-bg: #0C2A33;
+  --privacy-fg: #64D5E0;
+  --privacy-border: #14495A;
+}

@@ -1,0 +1,64 @@
+<!-- @dsCard group="Components" viewport="760x640" subtitle="Toolbar, ZoomControl, PageNavigator, PageCard, Modal, Toast, ContextMenu, DownloadCard" name="Workspace components" -->
+<!DOCTYPE html>
+<html><head>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{padding:20px 24px;background:var(--surface-page)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { Toolbar, ToolbarDivider, ZoomControl, PageNavigator, PageCard, Toast, ContextMenu, DownloadCard, IconButton, Badge, Button } = window.PDFinDesignSystem_41a2ca;
+const RotIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>;
+function FakePage({ n }) {
+  return (
+    <div style={{width:"78%",height:"84%",display:"flex",flexDirection:"column",gap:5,paddingTop:8}}>
+      <div style={{height:8,width:"62%",background:"var(--ink-300)",borderRadius:2}}></div>
+      {[...Array(7)].map((_,i)=><div key={i} style={{height:4,width:`${92-(i%3)*12}%`,background:"var(--ink-200)",borderRadius:2}}></div>)}
+    </div>
+  );
+}
+function Demo() {
+  const [zoom, setZoom] = React.useState(100);
+  const [page, setPage] = React.useState(3);
+  const [sel, setSel] = React.useState([2]);
+  const toggle = (n) => setSel(s => s.includes(n) ? s.filter(x=>x!==n) : [...s,n]);
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:18}}>
+      <Toolbar>
+        <ZoomControl value={zoom} onZoomIn={()=>setZoom(z=>Math.min(400,z+25))} onZoomOut={()=>setZoom(z=>Math.max(25,z-25))} onReset={()=>setZoom(100)} />
+        <ToolbarDivider></ToolbarDivider>
+        <PageNavigator page={page} count={18} onChange={setPage} />
+        <ToolbarDivider></ToolbarDivider>
+        <IconButton label="Rotate" size="sm" icon={RotIcon} />
+      </Toolbar>
+      <div style={{display:"flex",gap:14}}>
+        {[1,2,3].map(n =>
+          <PageCard key={n} pageNumber={n} width={120} selected={sel.includes(n)} rotation={n===3?90:0}
+            badge={n===3 ? <Badge tone="brand">90°</Badge> : null} onClick={()=>toggle(n)}>
+            <FakePage n={n} />
+          </PageCard>
+        )}
+      </div>
+      <div style={{position:"relative",height:150,border:"1px dashed var(--border-strong)",borderRadius:"var(--radius-md)"}}>
+        <ContextMenu x={16} y={16} items={[
+          {label:"Rotate right", icon:RotIcon, shortcut:"R"},
+          {label:"Duplicate", shortcut:"⌘D"},
+          "divider",
+          {label:"Delete page", danger:true, shortcut:"Del"},
+        ]} />
+        <div style={{position:"absolute",right:16,top:16,display:"flex",flexDirection:"column",gap:8}}>
+          <Toast tone="success" onDismiss={()=>{}}>Halaman dihapus.</Toast>
+          <Toast tone="neutral" action={<Button variant="ghost" size="sm">Urungkan</Button>}>1 halaman dipindahkan.</Toast>
+        </div>
+      </div>
+      <DownloadCard name="hasil-gabungan.pdf" meta="1,8 MB · 24 halaman" downloadLabel="Unduh" />
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body></html>

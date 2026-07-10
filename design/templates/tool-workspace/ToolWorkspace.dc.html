@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Tool workspace" description="PDFin tool-page shell: top nav with breadcrumb, file sidebar, main workspace, settings inspector" -->
+<helmet>
+  <script src="./ds-base.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; background: var(--surface-page); }
+    a { color: var(--text-link); }
+    a:hover { color: var(--text-link-hover); }
+  </style>
+</helmet>
+<div style="height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: var(--font-sans)">
+
+  <header style="height: 56px; background: var(--surface-card); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; gap: 16px; padding: 0 16px; flex: none">
+    <span style="display: inline-flex; align-items: center; gap: 7px">
+      <img src="../../assets/logo/pdfin-mark-64.png" alt="PDFin" style="width: 26px; height: 26px" />
+      <span style="font: 800 17px/1 var(--font-sans); letter-spacing: -0.02em; color: var(--text-heading)">PDF<span style="color: var(--text-brand)">in</span></span>
+    </span>
+    <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; flex: 1">
+      <span style="font: var(--type-body-sm); color: var(--text-muted)">{{ breadcrumb }}</span>
+      <span aria-hidden="true" style="color: var(--text-faint); font: var(--type-body-sm)">/</span>
+      <span style="font: 600 14px/1 var(--font-sans); color: var(--text-heading)">{{ toolName }}</span>
+    </nav>
+    <x-import component-from-global-scope="PDFinDesignSystem_41a2ca.LangSwitcher" lang="id" hint-size="86px,32px"></x-import>
+  </header>
+
+  <div style="flex: 1; display: flex; min-height: 0">
+
+    <aside style="width: 248px; flex: none; border-right: 1px solid var(--border-default); background: var(--surface-card); display: flex; flex-direction: column; padding: 14px; gap: 14px; overflow: auto">
+      <h2 style="font: 600 11.5px/1 var(--font-sans); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 0">File</h2>
+      <x-import component-from-global-scope="PDFinDesignSystem_41a2ca.Dropzone" lang="id" compact="{{ true }}" hint-size="100%,120px"></x-import>
+      <x-import component-from-global-scope="PDFinDesignSystem_41a2ca.FileCard" name="dokumen.pdf" meta="1,2 MB · 12 halaman" hint-size="100%,56px"></x-import>
+    </aside>
+
+    <main style="flex: 1; display: flex; flex-direction: column; min-width: 0; align-items: center; justify-content: center; gap: 16px; padding: 32px">
+      <span style="display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 16px; background: var(--surface-brand-subtle); color: var(--text-brand); font: 700 22px/1 var(--font-sans)">⌘</span>
+      <h1 style="font: 700 22px/1.25 var(--font-sans); letter-spacing: -0.02em; color: var(--text-heading); margin: 0">{{ toolName }}</h1>
+      <p style="font: var(--type-body-sm); color: var(--text-muted); margin: 0; max-width: 420px; text-align: center">{{ toolDescription }}</p>
+      <x-import component-from-global-scope="PDFinDesignSystem_41a2ca.PrivacyPill" lang="id" hint-size="220px,28px"></x-import>
+    </main>
+
+    <aside style="width: 300px; flex: none; border-left: 1px solid var(--border-default); background: var(--surface-card); display: flex; flex-direction: column">
+      <div style="padding: 14px 16px; border-bottom: 1px solid var(--border-default)">
+        <h2 style="font: 600 13px/1 var(--font-sans); color: var(--text-heading); margin: 0">Pengaturan</h2>
+      </div>
+      <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+        <p style="font: var(--type-caption); color: var(--text-faint); margin: 0">Letakkan kontrol alat di sini — Select, Switch, slider, dan ringkasan hasil.</p>
+      </div>
+      <div style="padding: 14px; border-top: 1px solid var(--border-default)">
+        <x-import component-from-global-scope="PDFinDesignSystem_41a2ca.Button" variant="primary" size="lg" full-width="{{ true }}" hint-size="100%,44px">{{ toolName }}</x-import>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;toolName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Gabung PDF&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;toolDescription&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Gabungkan beberapa file PDF menjadi satu.&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;breadcrumb&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Alat&quot;,&quot;tsType&quot;:&quot;string&quot;}}"></script>
+</body>
+</html>

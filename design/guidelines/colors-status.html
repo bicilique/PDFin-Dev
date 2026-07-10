@@ -1,0 +1,14 @@
+<!-- @dsCard group="Colors" viewport="700x150" subtitle="Success, warning, error, info — bg + fg pairs" name="Status colors" -->
+<!DOCTYPE html>
+<html><head><link rel="stylesheet" href="../styles.css">
+<style>
+  body{display:flex;gap:12px;padding:24px;align-items:center}
+  .chip{flex:1;border-radius:10px;padding:14px 16px;font:var(--type-label)}
+  .chip code{display:block;font:var(--type-caption);font-family:var(--font-mono);margin-top:4px;opacity:.75}
+</style></head>
+<body>
+  <div class="chip" style="background:var(--status-success-bg);color:var(--status-success-fg)">Selesai<code>--status-success-*</code></div>
+  <div class="chip" style="background:var(--status-warning-bg);color:var(--status-warning-fg)">File besar<code>--status-warning-*</code></div>
+  <div class="chip" style="background:var(--status-error-bg);color:var(--status-error-fg)">Terjadi kesalahan<code>--status-error-*</code></div>
+  <div class="chip" style="background:var(--status-info-bg);color:var(--status-info-fg)">Diproses lokal<code>--status-info-*</code></div>
+</body></html>

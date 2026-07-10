@@ -16,9 +16,7 @@
         try {
           theme = normalize(localStorage.getItem("pdfin-theme")) || normalize(localStorage.getItem("pdfin-ws-theme"));
         } catch {}
-        if (!theme) {
-          theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        }
+        if (!theme) theme = "light";
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>

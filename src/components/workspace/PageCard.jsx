@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /**
  * Card for one PDF page in a grid: thumbnail slot, page number, selection ring,
@@ -89,7 +90,7 @@ export function PageCard({
             }}
           >
             {selected && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+              Icons.tick(12, { stroke: 3 })
             )}
           </span>
         )}

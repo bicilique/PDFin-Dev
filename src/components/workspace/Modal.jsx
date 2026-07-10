@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** Modal dialog with overlay, title, body, footer slot. Esc and overlay click close. */
 export function Modal({ title, children, footer = null, onClose, width = 440 }) {
@@ -51,7 +52,7 @@ export function Modal({ title, children, footer = null, onClose, width = 440 }) 
                 background: "transparent", color: "var(--text-muted)", cursor: "pointer", flex: "none",
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+              {Icons.x(16)}
             </button>
           )}
         </div>

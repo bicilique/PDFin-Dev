@@ -3,7 +3,7 @@ import React from "react";
 /** Icon-only button with accessible name. variant: ghost | outline. */
 export function IconButton({ label, icon, variant = "ghost", size = "md", disabled = false, onClick, ...rest }) {
   const [hover, setHover] = React.useState(false);
-  const dim = size === "sm" ? 32 : 40;
+  const dim = size === "sm" ? 36 : 44;
   return (
     <button
       type="button"

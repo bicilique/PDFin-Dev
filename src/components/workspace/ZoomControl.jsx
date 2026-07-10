@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** Zoom stepper: minus / mono percent / plus. Click the percent to reset. */
 export function ZoomControl({ value = 100, onZoomIn, onZoomOut, onReset, min = 25, max = 400 }) {
@@ -9,7 +10,7 @@ export function ZoomControl({ value = 100, onZoomIn, onZoomOut, onReset, min = 2
     <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
       {btn(
         "Zoom out",
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14"></path></svg>,
+        Icons.minus(16),
         onZoomOut,
         value <= min
       )}
@@ -33,7 +34,7 @@ export function ZoomControl({ value = 100, onZoomIn, onZoomOut, onReset, min = 2
       </button>
       {btn(
         "Zoom in",
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"></path></svg>,
+        Icons.zoomIn(16),
         onZoomIn,
         value >= max
       )}

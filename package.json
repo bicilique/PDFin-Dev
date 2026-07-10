@@ -18,6 +18,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@jspawn/qpdf-wasm": "^0.0.2",
+    "@tabler/icons-react": "^3.44.0",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/ind": "^1.0.0",
     "@vitejs/plugin-react": "^4.3.4",

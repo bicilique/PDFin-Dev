@@ -182,6 +182,7 @@ function SortableFileItem({ file: f, index: i, count, t, lang, allowReorder, onM
       transition,
     }}>
       <button
+        className="ws-file-drag-handle"
         type="button"
         aria-label={lang === "id" ? `Seret ${f.name}` : `Drag ${f.name}`}
         disabled={disabled}
@@ -201,7 +202,7 @@ function SortableFileItem({ file: f, index: i, count, t, lang, allowReorder, onM
           padding: 0,
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="8" cy="6" r="1.5"></circle><circle cx="16" cy="6" r="1.5"></circle><circle cx="8" cy="12" r="1.5"></circle><circle cx="16" cy="12" r="1.5"></circle><circle cx="8" cy="18" r="1.5"></circle><circle cx="16" cy="18" r="1.5"></circle></svg>
+        {WSIcons.grip(14)}
       </button>
       <div style={{ width: 30, height: 38, flex: "none", border: "1px solid var(--border-default)", borderRadius: 4, overflow: "hidden", background: "var(--surface-sunken)" }}>
         {f.status === "ready" ? <LazyThumb fileId={f.id} pageNo={1} width={30} /> : <span className="ws-shimmer" style={{ display: "block", width: "100%", height: "100%" }}></span>}
@@ -226,7 +227,7 @@ function SortableFileItem({ file: f, index: i, count, t, lang, allowReorder, onM
       }}
         onMouseEnter={(e) => e.currentTarget.style.color = "var(--status-error-fg)"}
         onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-faint)"}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        {WSIcons.x(14)}
       </button>
     </div>
   );
@@ -241,13 +242,11 @@ function fileStatusLabel(file, t, lang) {
 
 function ArrowBtn({ dir, disabled, onClick, label }) {
   return (
-    <button type="button" aria-label={label || dir} disabled={disabled} onClick={onClick} style={{
+    <button type="button" className="ws-file-move-button" aria-label={label || dir} disabled={disabled} onClick={onClick} style={{
       display: "flex", border: "none", background: "transparent", color: disabled ? "var(--color-disabled-fg)" : "var(--text-faint)",
       cursor: disabled ? "default" : "pointer", padding: "1px 2px",
     }}>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        {dir === "up" ? <path d="m18 15-6-6-6 6"></path> : <path d="m6 9 6 6 6-6"></path>}
-      </svg>
+      {dir === "up" ? WSIcons.chevUp(12, { stroke: 2.4 }) : WSIcons.chevDown(12, { stroke: 2.4 })}
     </button>
   );
 }
@@ -400,6 +399,7 @@ function SortablePageItem({ page, index, t, width, selected, highlighted, badge,
     }}>
       {!disabled && (
         <button
+          className="ws-page-drag-handle"
           type="button"
           aria-label={`Drag page ${index + 1}`}
           {...attributes}
@@ -423,7 +423,7 @@ function SortablePageItem({ page, index, t, width, selected, highlighted, badge,
             boxShadow: "var(--shadow-card)",
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="8" cy="6" r="1.5"></circle><circle cx="16" cy="6" r="1.5"></circle><circle cx="8" cy="12" r="1.5"></circle><circle cx="16" cy="12" r="1.5"></circle><circle cx="8" cy="18" r="1.5"></circle><circle cx="16" cy="18" r="1.5"></circle></svg>
+          {WSIcons.grip(14)}
         </button>
       )}
       <PageCard
@@ -471,7 +471,7 @@ function SortablePageItem({ page, index, t, width, selected, highlighted, badge,
             }}
           />
           {selected ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+            WSIcons.tick(14, { stroke: 3 })
           ) : (
             <span aria-hidden="true" style={{ width: 13, height: 13, border: "1.5px solid currentColor", borderRadius: 3 }}></span>
           )}
@@ -491,22 +491,24 @@ function SortablePageItem({ page, index, t, width, selected, highlighted, badge,
       {!disabled && (
         <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 5 }}>
           <button
+            className="ws-page-move-button"
             type="button"
             aria-label={moveLabel(page, "earlier")}
             disabled={!onMoveUp || !canMoveUp}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMoveUp && canMoveUp && onMoveUp(); }}
             style={pageMoveButtonStyle(!onMoveUp || !canMoveUp)}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+            {WSIcons.chevLeft(12, { stroke: 2.4 })}
           </button>
           <button
+            className="ws-page-move-button"
             type="button"
             aria-label={moveLabel(page, "later")}
             disabled={!onMoveDown || !canMoveDown}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMoveDown && canMoveDown && onMoveDown(); }}
             style={pageMoveButtonStyle(!onMoveDown || !canMoveDown)}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+            {WSIcons.chevRight(12, { stroke: 2.4 })}
           </button>
         </div>
       )}

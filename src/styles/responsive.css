@@ -1,0 +1,199 @@
+/* App-level responsive behavior shared by home and workspace shells. */
+
+.mobile-menu-button {
+  display: none;
+}
+
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--color-overlay-scrim);
+}
+
+.mobile-drawer,
+.mobile-bottom-sheet {
+  background: var(--surface-card);
+  color: var(--text-body);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+  outline: none;
+}
+
+.mobile-drawer {
+  width: min(340px, calc(100vw - 28px));
+  min-height: 100dvh;
+  padding: calc(12px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.mobile-overlay--sheet {
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.mobile-bottom-sheet {
+  width: 100%;
+  max-height: min(82dvh, 720px);
+  border-radius: 18px 18px 0 0;
+  border-bottom: none;
+  padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
+  overflow: auto;
+}
+
+.mobile-bottom-sheet__handle {
+  display: block;
+  width: 44px;
+  height: 4px;
+  margin: 2px auto 8px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+.mobile-overlay__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-overlay__header h2 {
+  font: var(--weight-bold) 17px/1.25 var(--font-sans);
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.mobile-icon-button,
+.mobile-menu-button {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-body);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.mobile-menu-button {
+  display: none;
+}
+
+.mobile-drawer__body,
+.mobile-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-drawer__label {
+  font: var(--weight-semibold) 12px/1 var(--font-sans);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mobile-drawer__theme {
+  min-height: 48px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-brand-subtle);
+  color: var(--text-brand);
+  font: var(--type-label);
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  .app-header {
+    min-height: calc(56px + env(safe-area-inset-top)) !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    padding: calc(6px + env(safe-area-inset-top)) 12px 6px !important;
+  }
+
+  .app-header__logo {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .app-header__nav,
+  .app-header__desktop-controls {
+    display: none !important;
+  }
+
+  .app-header__theme,
+  .ws-top-nav__theme {
+    flex: none;
+  }
+
+  .mobile-menu-button {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .home-hero {
+    padding: 28px 16px 24px !important;
+  }
+
+  .home-hero h1 {
+    font: var(--weight-extrabold) 31px/1.08 var(--font-sans) !important;
+    letter-spacing: 0 !important;
+  }
+
+  .home-hero__actions {
+    display: grid !important;
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero__actions a {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .home-trust,
+  .home-tools {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .home-tools {
+    padding-top: 26px !important;
+  }
+
+  .home-tool-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .app-footer {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 12px !important;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .app-footer > span {
+    flex: none !important;
+  }
+
+  .app-footer a {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    overflow-wrap: anywhere;
+  }
+}

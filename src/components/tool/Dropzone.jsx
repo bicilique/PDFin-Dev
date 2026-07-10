@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** File drop zone — dashed border, keyboard-accessible button fallback. */
 export function Dropzone({ lang = "id", multiple = false, accept = "PDF", onSelect, compact = false }) {
@@ -29,9 +30,7 @@ export function Dropzone({ lang = "id", multiple = false, accept = "PDF", onSele
         background: "var(--surface-brand-subtle)", color: "var(--text-brand)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path>
-        </svg>
+        {Icons.upload(24)}
       </div>
       <div style={{ font: "var(--type-h4)", color: "var(--text-heading)" }}>{t.drop}</div>
       <div style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{t.or}</div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Button, Input } from "../../../components/index.js";
+import { Alert, Button, Input, splitModeIcons } from "../../../components/index.js";
 import { PdfEngine } from "../engine/pdfEngine.js";
 import { PdfProcess } from "../engine/pdfProcess.js";
 
@@ -217,10 +217,7 @@ export function getSplitPlan(ctx, opts, lang = "id") {
 }
 
 function SplitModeIcon({ mode }) {
-  const common = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
-  if (mode === "range") return <svg {...common}><path d="M4 7h16"></path><path d="M4 17h16"></path><path d="M8 3v18"></path><path d="M16 3v18"></path></svg>;
-  if (mode === "selected") return <svg {...common}><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>;
-  return <svg {...common}><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><path d="M8 4v4"></path><path d="M16 10v4"></path></svg>;
+  return (splitModeIcons[mode] || splitModeIcons.every)(16);
 }
 
 function SplitModePicker({ lang, value, onChange }) {

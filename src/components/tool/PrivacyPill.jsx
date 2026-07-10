@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** Privacy trust pill — the cyan local-processing marker used on every tool page. */
 export function PrivacyPill({ lang = "id", text }) {
@@ -15,9 +16,7 @@ export function PrivacyPill({ lang = "id", text }) {
       padding: "6px 12px",
       font: "var(--type-caption)",
     }}>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-      </svg>
+      {Icons.privacy(12, { stroke: 2.5 })}
       {copy}
     </span>
   );

@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** Result file card: success icon, mono filename, meta, primary download action. */
 export function DownloadCard({ name, meta, downloadLabel = "Download", onDownload, icon = null }) {
@@ -29,9 +30,7 @@ export function DownloadCard({ name, meta, downloadLabel = "Download", onDownloa
           flex: "none",
         }}
       >
-        {icon || (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
-        )}
+        {icon || Icons.filePdf(20)}
       </span>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
         <span style={{ font: "var(--weight-medium) 13px/1.3 var(--font-mono)", color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
@@ -57,7 +56,7 @@ export function DownloadCard({ name, meta, downloadLabel = "Download", onDownloa
           transition: "background var(--duration-fast) var(--ease-out)",
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+        {Icons.download(16)}
         {downloadLabel}
       </button>
     </div>

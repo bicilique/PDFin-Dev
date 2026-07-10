@@ -30,8 +30,8 @@ describe("App tool hash routing", () => {
     expect(await screen.findByRole("heading", { name: /gabung pdf/i })).toBeInTheDocument();
     expect(screen.getByText(/gabungkan beberapa pdf menjadi satu file/i)).toBeInTheDocument();
     expect(screen.getAllByText(/pdf hingga 100 mb/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/tambahkan minimal 2 file pdf/i)).toBeInTheDocument();
-    expect(screen.getByText(/file anda diproses di browser/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/tambahkan minimal 2 file pdf/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/file anda diproses/i).length).toBeGreaterThan(0);
   });
 
   it("renders the home catalog with deterministic workspace links", () => {
@@ -140,7 +140,7 @@ describe("App tool hash routing", () => {
     expect(await screen.findByRole("heading", { name: /gabung pdf/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /beralih ke mode terang/i })).toHaveAttribute("aria-pressed", "true");
     expect(localStorage.getItem("pdfin-theme")).toBe("dark");
-    expect(localStorage.getItem("pdfin-ws-theme")).toBe("dark");
+    expect(localStorage.getItem("pdfin-ws-theme")).toBeNull();
   });
 
   it("migrates the legacy workspace theme key and persists future changes to the shared key", async () => {
@@ -155,7 +155,7 @@ describe("App tool hash routing", () => {
 
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     expect(localStorage.getItem("pdfin-theme")).toBe("light");
-    expect(localStorage.getItem("pdfin-ws-theme")).toBe("light");
+    expect(localStorage.getItem("pdfin-ws-theme")).toBeNull();
     expect(screen.getByRole("button", { name: /beralih ke mode gelap/i })).toHaveAttribute("aria-pressed", "false");
   });
 

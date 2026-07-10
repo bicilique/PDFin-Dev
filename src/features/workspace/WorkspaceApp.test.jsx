@@ -626,8 +626,8 @@ describe("WorkspaceApp canonical runtime", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("source.pdf")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("tab", { name: /pengaturan/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^pengaturan$/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^pengaturan$/i }));
     expect(screen.getByText(/pratinjau watermark mengikuti/i)).toBeInTheDocument();
     expect(screen.getAllByText(/penempatan/i).length).toBeGreaterThan(0);
 
@@ -643,8 +643,8 @@ describe("WorkspaceApp canonical runtime", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("numbered.pdf")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("tab", { name: /pengaturan/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^pengaturan$/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^pengaturan$/i }));
     expect(screen.getByText(/pratinjau nomor halaman/i)).toBeInTheDocument();
     expect(screen.getAllByText(/posisi/i).length).toBeGreaterThan(0);
   });
@@ -824,7 +824,7 @@ describe("WorkspaceApp canonical runtime", () => {
     expect(screen.getByRole("button", { name: /coba lagi/i })).toBeInTheDocument();
   });
 
-  it("uses mobile workspace tabs and keeps the primary action reachable", async () => {
+  it("uses mobile workspace sheets and keeps the primary action reachable", async () => {
     setViewportWidth(390);
     window.history.replaceState(null, "", "/#merge");
     render(<WorkspaceApp />);
@@ -839,11 +839,12 @@ describe("WorkspaceApp canonical runtime", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("first.pdf")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("option", { name: /page 1, first\.pdf/i })).toBeInTheDocument());
 
-    expect(screen.getByRole("tab", { name: /file/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /halaman/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /pengaturan/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^file$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /file/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /halaman/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^pengaturan$/i })).toBeInTheDocument();
     expect(screen.queryByText(/^pintasan$/i)).not.toBeInTheDocument();
 
     const readyCta = screen
@@ -853,7 +854,7 @@ describe("WorkspaceApp canonical runtime", () => {
     expect(screen.getByText(/siap diproses/i)).toBeInTheDocument();
   });
 
-  it("lets mobile users switch between file review, pages, and settings", async () => {
+  it("lets mobile users open file review and settings sheets", async () => {
     setViewportWidth(390);
     window.history.replaceState(null, "", "/#merge");
     render(<WorkspaceApp />);
@@ -868,15 +869,19 @@ describe("WorkspaceApp canonical runtime", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("first.pdf")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("option", { name: /page 1, first\.pdf/i })).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("tab", { name: /halaman/i }));
-    expect(screen.getByRole("tab", { name: /halaman/i })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("option", { name: /page 1/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: /pengaturan/i }));
-    expect(screen.getByRole("tab", { name: /pengaturan/i })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: /^pengaturan$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^file$/i }));
+    expect(screen.getByRole("dialog", { name: /^file$/i })).toBeInTheDocument();
+    expect(screen.getByText("first.pdf")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /^file$/i })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /^pengaturan$/i }));
+    expect(screen.getByRole("dialog", { name: /^pengaturan$/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: /^pengaturan$/i }).length).toBeGreaterThan(0);
     expect(screen.getByText(/siap diproses/i)).toBeInTheDocument();
     expect(
       screen
@@ -1189,7 +1194,7 @@ describe("WorkspaceApp canonical runtime", () => {
   });
 
   it("connects compact workspace tabs to their tab panels", async () => {
-    setViewportWidth(390);
+    setViewportWidth(820);
     window.history.replaceState(null, "", "/#merge");
     render(<WorkspaceApp />);
 

@@ -3,7 +3,7 @@ import { Header, Footer } from "./Chrome.jsx";
 import { HomeScreen } from "../features/home/HomeScreen.jsx";
 import { WorkspaceApp } from "../features/workspace/WorkspaceApp.jsx";
 import { DEFAULT_TOOL_ID, getToolFromHash, getToolHref, isWorkspaceRoute } from "./toolRoutes.js";
-import { applyTheme, getInitialTheme, persistTheme } from "./theme.js";
+import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "./theme.js";
 
 function getInitialScreen() {
   return isWorkspaceRoute() ? "workspace" : "home";
@@ -14,11 +14,19 @@ export function App() {
   const [theme, setTheme] = React.useState(getInitialTheme);
   const [screen, setScreen] = React.useState(getInitialScreen);
 
+  const setExplicitTheme = React.useCallback((nextTheme) => {
+    setTheme(nextTheme);
+    persistExplicitTheme(nextTheme);
+  }, []);
+
   React.useEffect(() => {
     applyTheme(theme);
-    persistTheme(theme);
     document.documentElement.setAttribute("lang", lang);
   }, [theme, lang]);
+
+  React.useEffect(() => {
+    migrateLegacyThemePreference();
+  }, []);
 
   React.useEffect(() => {
     const syncScreen = () => setScreen(getInitialScreen());
@@ -57,7 +65,7 @@ export function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--surface-page)" }}>
+    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--surface-page)" }}>
       <a className="skip-link" href="#home-main" onClick={focusHomeMain}>
         {lang === "id" ? "Lewati ke katalog alat" : "Skip to tool catalog"}
       </a>
@@ -65,7 +73,7 @@ export function App() {
         lang={lang}
         setLang={setLang}
         theme={theme}
-        setTheme={setTheme}
+        setTheme={setExplicitTheme}
         current="home"
         onHome={openHome}
         onWorkspace={() => openWorkspace(DEFAULT_TOOL_ID)}

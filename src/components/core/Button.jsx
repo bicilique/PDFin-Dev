@@ -31,9 +31,9 @@ export function Button({
     whiteSpace: "nowrap",
   };
   const sizes = {
-    sm: { padding: "6px 12px", fontSize: "var(--text-sm)" },
-    md: { padding: "9px 18px", fontSize: "var(--text-base)" },
-    lg: { padding: "13px 26px", fontSize: "var(--text-md)" },
+    sm: { minHeight: 36, padding: "6px 12px", fontSize: "var(--text-sm)" },
+    md: { minHeight: 44, padding: "9px 18px", fontSize: "var(--text-base)" },
+    lg: { minHeight: 48, padding: "13px 26px", fontSize: "var(--text-md)" },
   };
   const active = !disabled && state === "active";
   const hover = !disabled && (state === "hover" || active);

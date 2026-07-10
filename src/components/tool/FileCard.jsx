@@ -1,4 +1,5 @@
 import React from "react";
+import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** Uploaded-file card: thumbnail, mono filename, meta, actions. */
 export function FileCard({ name, meta, thumbnail, onRemove, dragHandle = true, removeLabel = "Hapus file" }) {
@@ -21,7 +22,7 @@ export function FileCard({ name, meta, thumbnail, onRemove, dragHandle = true, r
     >
       {dragHandle && (
         <span aria-hidden="true" style={{ color: "var(--text-faint)", cursor: "grab", display: "flex" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.6"></circle><circle cx="15" cy="5" r="1.6"></circle><circle cx="9" cy="12" r="1.6"></circle><circle cx="15" cy="12" r="1.6"></circle><circle cx="9" cy="19" r="1.6"></circle><circle cx="15" cy="19" r="1.6"></circle></svg>
+          {Icons.grip(16)}
         </span>
       )}
       <div style={{
@@ -31,9 +32,7 @@ export function FileCard({ name, meta, thumbnail, onRemove, dragHandle = true, r
         display: "flex", alignItems: "center", justifyContent: "center",
         color: "var(--text-faint)",
       }}>
-        {!thumbnail && (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><path d="M14 2v6h6"></path></svg>
-        )}
+        {!thumbnail && Icons.filePdf(18)}
       </div>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
         <span style={{ font: "var(--type-mono)", fontWeight: 500, color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
@@ -45,7 +44,7 @@ export function FileCard({ name, meta, thumbnail, onRemove, dragHandle = true, r
           background: "transparent", color: "var(--text-muted)", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>
+          {Icons.trash(16)}
         </button>
       )}
     </div>

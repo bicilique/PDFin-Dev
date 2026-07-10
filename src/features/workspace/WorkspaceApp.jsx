@@ -1,6 +1,6 @@
 import React from "react";
-import { Badge, Button, IconButton, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
-import { applyTheme, getInitialTheme, persistTheme } from "../../app/theme.js";
+import { Badge, Button, IconButton, MobileBottomSheet, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
+import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "../../app/theme.js";
 import { PDFIN_T } from "./i18n.js";
 import { PdfEngine } from "./engine/pdfEngine.js";
 import { PdfProcess } from "./engine/pdfProcess.js";
@@ -96,7 +96,7 @@ function SplitSelectionToolbar({ lang, selectedCount, totalCount, onSelectAll, o
   );
 }
 
-export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
+export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHome }) {
   const [lang, setLang] = React.useState(localStorage.getItem("pdfin-ws-lang") || initialLang);
   const [theme, setTheme] = React.useState(() => getInitialTheme(initialTheme));
   const [tool, setTool] = React.useState(hashTool());
@@ -112,6 +112,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   const [switcher, setSwitcher] = React.useState(false);
   const [inspOpen, setInspOpen] = React.useState(true);
   const [activeCompactPanel, setActiveCompactPanel] = React.useState("files");
+  const [mobileSheet, setMobileSheet] = React.useState(null);
   const [toasts, setToasts] = React.useState([]);
   const [pageGridZoom, setPageGridZoom] = React.useState(100);
   const [previewPageUid, setPreviewPageUid] = React.useState(null);
@@ -131,12 +132,20 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   const isCompact = useMediaQuery("(max-width: 1023px)");
   const isMobile = useMediaQuery("(max-width: 767px)");
 
+  const setExplicitTheme = React.useCallback((nextTheme) => {
+    setTheme(nextTheme);
+    persistExplicitTheme(nextTheme);
+  }, []);
+
   React.useEffect(() => {
     applyTheme(theme);
     document.documentElement.setAttribute("lang", lang);
-    persistTheme(theme);
     localStorage.setItem("pdfin-ws-lang", lang);
   }, [theme, lang]);
+
+  React.useEffect(() => {
+    migrateLegacyThemePreference();
+  }, []);
 
   React.useEffect(() => {
     const onHash = () => switchTool(hashTool(), false);
@@ -649,8 +658,12 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
     }
   }, [activeCompactPanel, isCompact, showInspector, stage]);
 
+  React.useEffect(() => {
+    if (!isMobile) setMobileSheet(null);
+  }, [isMobile]);
+
   return (
-    <div className={isCompact ? "ws-root is-compact" : "ws-root"} style={{ height: "100vh", display: "flex", flexDirection: "column", background: "var(--surface-page)", overflow: "hidden" }}>
+    <div className={isCompact ? "ws-root is-compact" : "ws-root"} style={{ height: "100dvh", minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--surface-page)", overflow: "hidden" }}>
       <a className="skip-link" href="#workspace-main" onClick={focusWorkspaceMain}>{t.a11y.skipWorkspace}</a>
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label={t.a11y.workspaceStatus}>
         {liveStatus}
@@ -660,7 +673,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
           {liveError}
         </div>
       )}
-      <WorkspaceTopNav t={t} tool={tool} lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} onOpenSwitcher={() => setSwitcher(true)} compact={isCompact} />
+      <WorkspaceTopNav t={t} tool={tool} lang={lang} setLang={setLang} theme={theme} setTheme={setExplicitTheme} onOpenSwitcher={() => setSwitcher(true)} compact={isCompact} onHome={onHome} />
       <div
         className={isCompact ? "ws-body is-compact" : "ws-body"}
         style={{ flex: 1, display: "flex", minHeight: 0 }}
@@ -672,7 +685,11 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
         {!isCompact && sidebarPanel}
         <main id="workspace-main" tabIndex={-1} className="ws-main" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
           {stage === "ready" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isCompact ? "10px 14px 0" : "10px 24px 0" }}>
+            <div className="ws-ready-summary" style={{ display: "flex", alignItems: "center", gap: 10, padding: isCompact ? "10px 14px 0" : "10px 24px 0" }}>
+              <div className="ws-ready-summary__title">
+                <strong>{t.toolNames[tool]}</strong>
+                <span>{livePages.length} {t.success.pages}</span>
+              </div>
               <PrivacyPill lang={lang} />
               {selectable && (
                 <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>
@@ -681,7 +698,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
               )}
             </div>
           )}
-          {isCompact && stage === "ready" ? (
+          {isCompact && !isMobile && stage === "ready" ? (
             <div
               id={compactPanelId}
               role="tabpanel"
@@ -700,7 +717,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: inspOpen ? "12px 14px" : "12px 8px", borderBottom: inspOpen ? "1px solid var(--border-default)" : "none" }}>
               <IconButton size="sm" label={inspOpen ? t.inspector.collapse : t.inspector.expand} onClick={() => setInspOpen(!inspOpen)}
-                icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{inspOpen ? <path d="m9 18 6-6-6-6"></path> : <path d="m15 18-6-6 6-6"></path>}</svg>} />
+                icon={inspOpen ? WSIcons.chevRight(15) : WSIcons.chevLeft(15)} />
               {inspOpen && <h2 style={{ font: "var(--weight-semibold) 13px/1 var(--font-sans)", color: "var(--text-heading)", margin: 0, flex: 1 }}>{t.inspector.title}</h2>}
               {inspOpen && def.simulated && <Badge tone="warning">{t.release.prototype}</Badge>}
             </div>
@@ -716,7 +733,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
             )}
           </aside>
         )}
-        {isCompact && stage === "ready" && (
+        {isCompact && !isMobile && stage === "ready" && (
           <div className="ws-compact-tabs" role="tablist" aria-label={t.toolNames[tool]}>
             {tabs.map(([id, label]) => (
               <button
@@ -734,9 +751,18 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
             ))}
           </div>
         )}
-        {isCompact && stage === "ready" && showInspector && (
+        {isCompact && !isMobile && stage === "ready" && showInspector && (
           <div className="ws-mobile-cta">
             {processAction}
+          </div>
+        )}
+        {isMobile && stage === "ready" && (
+          <div className="ws-mobile-actions" aria-label={lang === "id" ? "Aksi workspace" : "Workspace actions"}>
+            <div className="ws-mobile-actions__tools">
+              <Button variant="secondary" size="sm" fullWidth onClick={() => setMobileSheet("files")}>{t.workspaceTabs.files}</Button>
+              {showInspector && <Button variant="secondary" size="sm" fullWidth onClick={() => setMobileSheet("settings")}>{t.workspaceTabs.settings}</Button>}
+            </div>
+            {showInspector && processAction}
           </div>
         )}
         {workspaceDrag && (
@@ -759,6 +785,18 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
         )}
       </div>
       {switcher && <QuickSwitcher t={t} toolIds={TOOL_IDS} current={tool} onPick={switchTool} onClose={() => setSwitcher(false)} />}
+      {isMobile && stage === "ready" && (
+        <React.Fragment>
+          <MobileBottomSheet open={mobileSheet === "files"} title={t.workspaceTabs.files} onClose={() => setMobileSheet(null)}>
+            {sidebarPanel}
+          </MobileBottomSheet>
+          {showInspector && (
+            <MobileBottomSheet open={mobileSheet === "settings"} title={t.inspector.title} onClose={() => setMobileSheet(null)}>
+              {settingsPanel}
+            </MobileBottomSheet>
+          )}
+        </React.Fragment>
+      )}
       {previewPage && (
         <PagePreviewModal
           t={t}

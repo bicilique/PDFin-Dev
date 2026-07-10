@@ -40,9 +40,9 @@ describe("SEO page catalog", () => {
     expect(unlock.description).toMatch(/dalam pengembangan|simulasi/i);
   });
 
-  it("has canonical GitHub Pages defaults", () => {
-    expect(SITE_URL).toBe("https://bicilique.github.io/PDFin-Dev");
-    expect(SITE_BASE_PATH).toBe("/PDFin-Dev/");
+  it("has canonical custom-domain defaults", () => {
+    expect(SITE_URL).toBe("https://www.pdfin.fun");
+    expect(SITE_BASE_PATH).toBe("/");
     expect(homeSeoPage.indexable).toBe(true);
     expect(homeSeoPage.h1).toBe("Alat PDF gratis yang bekerja di perangkat Anda");
     expect(homeSeoPage.description).toMatch(/tanpa mengunggah file ke server/i);

@@ -27,7 +27,7 @@ function normalizeBasePath(basePath) {
 }
 
 function getBuildBasePath() {
-  return normalizeBasePath(process.env.GITHUB_PAGES === "true" ? SITE_BASE_PATH : "/");
+  return normalizeBasePath(process.env.VITE_BASE_PATH || SITE_BASE_PATH);
 }
 
 function joinUrlPath(basePath, path = "") {

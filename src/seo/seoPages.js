@@ -1,7 +1,7 @@
 import { PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../features/workspace/toolCatalog.js";
 
-export const SITE_ORIGIN = "https://bicilique.github.io";
-export const SITE_BASE_PATH = "/PDFin-Dev/";
+export const SITE_ORIGIN = "https://www.pdfin.fun";
+export const SITE_BASE_PATH = "/";
 export const SITE_URL = `${SITE_ORIGIN}${SITE_BASE_PATH.replace(/\/$/, "")}`;
 
 const toolSeoCopy = {

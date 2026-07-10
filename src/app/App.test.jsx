@@ -182,7 +182,7 @@ describe("release documentation", () => {
     expect(readme).toMatch(/canonical workspace/i);
     expect(readme).toMatch(/\/#merge/);
     expect(readme).toMatch(/\/#split/);
-    expect(readme).toMatch(/GITHUB_PAGES=true npm run build/);
+    expect(readme).toMatch(/www\.pdfin\.fun/);
     expect(readme).toMatch(/output\/playwright/);
   });
 });

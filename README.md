@@ -24,13 +24,7 @@ npm run build
 npm run preview
 ```
 
-For GitHub Pages, verify the Pages asset base before release:
-
-```bash
-GITHUB_PAGES=true npm run build
-```
-
-The GitHub Pages build serves assets from `/PDFin-Dev/`.
+The production GitHub Pages deployment uses the custom domain `https://www.pdfin.fun/`, so built assets are served from `/`.
 
 The build also pre-renders SEO landing pages into `dist/`, including the home page, production tool pages, `sitemap.xml`, `robots.txt`, and a GitHub Pages `404.html` fallback. Prototype tools remain reachable for users but are marked `noindex` until their processing is final.
 
@@ -45,7 +39,7 @@ dist/       Generated build output, not committed
 
 ## GitHub Pages
 
-Deployment is configured in `.github/workflows/deploy-pages.yml`. In the GitHub repository settings, set Pages source to **GitHub Actions**.
+Deployment is configured in `.github/workflows/deploy-pages.yml`. In the GitHub repository settings, set Pages source to **GitHub Actions** and the custom domain to `www.pdfin.fun`.
 
 ## Current tool status
 
@@ -55,7 +49,7 @@ Workspace tools run client-side PDF processing in the browser. Unlock PDF remain
 
 Before a UI/UX release, verify the canonical workspace flow from discovery through download:
 
-- Run `npm test -- --run`, `npm run build`, and `GITHUB_PAGES=true npm run build`.
+- Run `npm test -- --run` and `npm run build`.
 - Smoke test the production build with `npm run preview`.
 - Check home, workspace empty, ready, processing, success, and error states.
 - Check keyboard navigation, light and dark themes, reduced motion, and 390px, 768px, 1024px, and 1440px viewports.

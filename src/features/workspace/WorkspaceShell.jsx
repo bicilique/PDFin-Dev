@@ -140,7 +140,7 @@ export function EmptyState({ t, tool, onFiles, onSample, acceptImages, busy }) {
   const [drag, setDrag] = React.useState(false);
   const inputRef = React.useRef(null);
   const accept = acceptImages ? "image/png,image/jpeg" : "application/pdf";
-  const handle = (fileList) => { const arr = [...fileList].filter((f) => accept.includes(f.type) || (!acceptImages && f.name.toLowerCase().endsWith(".pdf"))); if (arr.length) onFiles(arr); };
+  const handle = (fileList) => { const arr = [...fileList]; if (arr.length) onFiles(arr); };
   React.useEffect(() => {
     const onPaste = (e) => { if (e.clipboardData && e.clipboardData.files.length) handle(e.clipboardData.files); };
     document.addEventListener("paste", onPaste);
@@ -212,10 +212,11 @@ export function ProcessingView({ t, progress, label, onCancel }) {
   );
 }
 
-export function ProcessActionBar({ t, label, disabled, helper, onRun }) {
+export function ProcessActionBar({ t, label, disabled, helper, onRun, actionFields = null }) {
   const helperId = "workspace-process-helper";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {actionFields}
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         <span style={{
           font: "var(--weight-semibold) 11.5px/1.2 var(--font-sans)",

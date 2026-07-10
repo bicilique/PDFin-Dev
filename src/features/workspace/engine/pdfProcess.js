@@ -1,5 +1,21 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
+import {
+  PDFDocument,
+  StandardFonts,
+  TextRenderingMode,
+  beginText,
+  degrees,
+  endText,
+  popGraphicsState,
+  pushGraphicsState,
+  rgb,
+  setFontAndSize,
+  setTextMatrix,
+  setTextRenderingMode,
+  showText,
+} from "pdf-lib";
 import { PdfEngine } from "./pdfEngine.js";
+import { createTesseractOcrEngine } from "./ocrEngine.js";
+import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
 
 // PDFin workspace — real PDF processing via pdf-lib (+ pdf.js rendering for raster ops).
 // All functions return { outputs: [{ name, blob, size, pages }] }.
@@ -21,6 +37,120 @@ import { PdfEngine } from "./pdfEngine.js";
     return { name, blob, size: blob.size, pages };
   }
   const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  function randomOwnerPassword() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function hasDigitalSignatureMarkers(bytes) {
+    if (!bytes) return false;
+    const head = bytes.slice(0, Math.min(bytes.length, 256 * 1024));
+    const tail = bytes.slice(Math.max(0, bytes.length - 256 * 1024));
+    const text = new TextDecoder("latin1").decode(head) + "\n" + new TextDecoder("latin1").decode(tail);
+    return /\/ByteRange\b/.test(text) || /\/Sig\b/.test(text) || /\/FT\s*\/Sig\b/.test(text);
+  }
+
+  function hasEncryptionMarkers(bytes) {
+    if (!bytes) return false;
+    const tail = bytes.slice(Math.max(0, bytes.length - 256 * 1024));
+    const text = new TextDecoder("latin1").decode(tail);
+    return /\/Encrypt\b/.test(text);
+  }
+
+  function sourceHasDigitalSignature(fileId) {
+    return hasDigitalSignatureMarkers(E().files.get(fileId)?.bytes);
+  }
+
+  function sourceHasEncryption(fileId) {
+    return hasEncryptionMarkers(E().files.get(fileId)?.bytes);
+  }
+
+  function assertNotCancelled(signal) {
+    if (signal?.aborted) throw new Error("OCR_CANCELLED");
+  }
+
+  function liveOcrPages(files, opts = {}) {
+    const explicitPages = (opts.pages || []).filter((p) => !p.deleted);
+    if (explicitPages.length) return explicitPages;
+    const rec = E().files.get(files[0]?.id);
+    if (!rec) return [];
+    return Array.from({ length: rec.pageCount }, (_, index) => ({
+      fileId: rec.id,
+      srcIndex: index,
+      rotation: 0,
+      sourceName: rec.name,
+      sourcePageNumber: index + 1,
+    }));
+  }
+
+  function selectedOcrPageIndexes(opts, pageCount) {
+    if (!opts?.range || opts.pageMode !== "range") return null;
+    return new Set(parseRange(opts.range, pageCount));
+  }
+
+  function normalizeOcrWords(result) {
+    return (result?.words || [])
+      .map((word) => ({
+        text: String(word.text || "").trim(),
+        confidence: Number.isFinite(word.confidence) ? word.confidence : Number(word.confidence || 0),
+        bbox: word.bbox,
+      }))
+      .filter((word) => word.text && word.bbox);
+  }
+
+  function addInvisibleOcrText(page, font, ocrResult) {
+    const words = normalizeOcrWords(ocrResult);
+    if (!words.length) return [];
+    page.setFont(font);
+    const fontKey = page.fontKey || font.name;
+    const { width, height } = page.getSize();
+    const imageWidth = Number(ocrResult?.image?.width) || width;
+    const imageHeight = Number(ocrResult?.image?.height) || height;
+    const overlay = [];
+
+    for (const word of words) {
+      const box = word.bbox;
+      const x0 = Number(box.x0 ?? box.left ?? 0);
+      const y0 = Number(box.y0 ?? box.top ?? 0);
+      const x1 = Number(box.x1 ?? (box.left + box.width));
+      const y1 = Number(box.y1 ?? (box.top + box.height));
+      if (![x0, y0, x1, y1].every(Number.isFinite) || x1 <= x0 || y1 <= y0) continue;
+
+      const x = (x0 / imageWidth) * width;
+      const y = height - (y1 / imageHeight) * height;
+      const targetWidth = Math.max(1, ((x1 - x0) / imageWidth) * width);
+      const targetHeight = Math.max(1, ((y1 - y0) / imageHeight) * height * 0.86);
+      const textWidth = Math.max(0.1, font.widthOfTextAtSize(word.text, 1));
+      const xScale = targetWidth / textWidth;
+      const encoded = font.encodeText(word.text);
+
+      page.pushOperators(
+        pushGraphicsState(),
+        beginText(),
+        setTextRenderingMode(TextRenderingMode.Invisible),
+        setFontAndSize(fontKey, 1),
+        setTextMatrix(xScale, 0, 0, targetHeight, x, y),
+        showText(encoded),
+        endText(),
+        popGraphicsState()
+      );
+
+      overlay.push({
+        text: word.text,
+        confidence: word.confidence,
+        rect: {
+          x: x / width,
+          y: (height - y - targetHeight) / height,
+          w: targetWidth / width,
+          h: targetHeight / height,
+        },
+      });
+    }
+
+    return overlay;
+  }
 
   // Assemble a new PDF from a worklist of pages [{fileId, srcIndex, rotation, deleted}].
   async function assemble(pages, name, onProgress) {
@@ -85,6 +215,29 @@ import { PdfEngine } from "./pdfEngine.js";
     return [...set].sort((a, b) => a - b);
   }
 
+  function appliesToPage(opts, index, pageCount) {
+    if (opts?.excludeFirst && index === 0) return false;
+    if (opts?.scope !== "range") return true;
+    return parseRange(opts.range, pageCount).includes(index);
+  }
+
+  function appliedPageNumber(opts, index, pageCount) {
+    const start = Number(opts?.startAt) || 0;
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      if (appliesToPage(opts, i, pageCount)) offset++;
+    }
+    return start + offset;
+  }
+
+  function hexRgb(hex, fallback) {
+    const value = String(hex || "").trim();
+    const m = value.match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return fallback;
+    const n = Number.parseInt(m[1], 16);
+    return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+  }
+
   // Re-render every page to JPEG at a quality level and rebuild the PDF.
   async function compress(pages, opts, name, onProgress) {
     const { PDFDocument } = P();
@@ -120,6 +273,10 @@ import { PdfEngine } from "./pdfEngine.js";
       }
       const pagesArr = doc.getPages();
       for (let i = 0; i < pagesArr.length; i++) {
+        if (!appliesToPage(opts, i, pagesArr.length)) {
+          if (onProgress) onProgress(((f + (i + 1) / pagesArr.length) / files.length) * 95);
+          continue;
+        }
         const page = pagesArr[i];
         const { width, height } = page.getSize();
         const pos = anchor(opts.align, width, height);
@@ -129,7 +286,7 @@ import { PdfEngine } from "./pdfEngine.js";
           page.drawText(opts.text, {
             x: pos.x - (tw / 2) * Math.cos((opts.rotation * Math.PI) / 180),
             y: pos.y - (tw / 2) * Math.sin((opts.rotation * Math.PI) / 180),
-            size, font, color: rgb(0.42, 0.4, 0.53), opacity: opts.opacity / 100, rotate: degrees(opts.rotation),
+            size, font, color: hexRgb(opts.color, rgb(0.42, 0.4, 0.53)), opacity: opts.opacity / 100, rotate: degrees(opts.rotation),
           });
         } else if (image) {
           const w = (opts.size / 100) * width * 0.9;
@@ -206,8 +363,13 @@ import { PdfEngine } from "./pdfEngine.js";
       const font = await doc.embedFont(fonts[opts.font] || fonts.helvetica);
       const pagesArr = doc.getPages();
       pagesArr.forEach((page, i) => {
+        if (!appliesToPage(opts, i, pagesArr.length)) {
+          if (onProgress) onProgress(((f + (i + 1) / pagesArr.length) / files.length) * 95);
+          return;
+        }
         const { width, height } = page.getSize();
-        const label = opts.format === "n_of_total" ? `${i + 1} / ${pagesArr.length}` : opts.format === "page_n" ? `Halaman ${i + 1}` : String(i + 1);
+        const number = appliedPageNumber(opts, i, pagesArr.length);
+        const label = opts.format === "n_of_total" ? `${number} / ${pagesArr.length}` : opts.format === "page_n" ? `Halaman ${number}` : String(number);
         const tw = font.widthOfTextAtSize(label, opts.fontSize);
         const x = opts.position.endsWith("left") ? opts.margin : opts.position.endsWith("center") ? (width - tw) / 2 : width - opts.margin - tw;
         const y = opts.position.startsWith("top") ? height - opts.margin - opts.fontSize : opts.margin;
@@ -227,7 +389,13 @@ import { PdfEngine } from "./pdfEngine.js";
     const outputs = [];
     for (let f = 0; f < files.length; f++) {
       const doc = await PDFDocument.load(E().files.get(files[f].id).bytes, { ignoreEncryption: true });
-      try { doc.getForm().flatten(); } catch (e) { /* no form fields — pass through */ }
+      if (opts.forms) {
+        try { doc.getForm().flatten(); } catch (e) { /* no form fields — pass through */ }
+      }
+      if (opts.annotations) {
+        // pdf-lib does not provide a safe generic annotation rasterization API.
+        // Keep annotations intact rather than deleting review/comment data.
+      }
       if (onProgress) onProgress(((f + 1) / files.length) * 90);
       const base = files[f].name.replace(/\.pdf$/i, "");
       outputs.push(out(base + "-flat.pdf", await doc.save(), doc.getPageCount()));
@@ -240,14 +408,14 @@ import { PdfEngine } from "./pdfEngine.js";
   async function metadata(files, opts, onProgress) {
     const { PDFDocument } = P();
     const doc = await PDFDocument.load(E().files.get(files[0].id).bytes, { ignoreEncryption: true, updateMetadata: true });
-    if (opts.title != null) doc.setTitle(opts.title);
-    if (opts.author != null) doc.setAuthor(opts.author);
-    if (opts.subject != null) doc.setSubject(opts.subject);
-    if (opts.keywords != null) doc.setKeywords(opts.keywords.split(",").map((s) => s.trim()).filter(Boolean));
+    doc.setTitle(String(opts.title || ""));
+    doc.setAuthor(String(opts.author || ""));
+    doc.setSubject(String(opts.subject || ""));
+    doc.setKeywords((Array.isArray(opts.keywords) ? opts.keywords : String(opts.keywords || "").split(",")).map((s) => String(s).trim()).filter(Boolean));
     doc.setModificationDate(new Date());
     if (onProgress) onProgress(80);
     const base = files[0].name.replace(/\.pdf$/i, "");
-    const res = { outputs: [out(base + "-metadata.pdf", await doc.save(), doc.getPageCount())] };
+    const res = { outputs: [out(opts.outputName || base + "-metadata.pdf", await doc.save(), doc.getPageCount())] };
     if (onProgress) onProgress(100);
     return res;
   }
@@ -267,18 +435,184 @@ import { PdfEngine } from "./pdfEngine.js";
   async function sign(files, opts, onProgress) {
     const { PDFDocument } = P();
     const doc = await PDFDocument.load(E().files.get(files[0].id).bytes, { ignoreEncryption: true });
-    const png = await doc.embedPng(opts.signaturePng);
-    const page = doc.getPage(opts.pageIndex);
-    const { width, height } = page.getSize();
-    // opts.rect is fractional {x, y, w} relative to the page (y from top)
-    const w = opts.rect.w * width;
-    const h = w * (png.height / png.width);
-    page.drawImage(png, { x: opts.rect.x * width, y: height - opts.rect.y * height - h, width: w, height: h });
-    if (onProgress) onProgress(90);
+    const placements = opts.placements || [];
+    for (let i = 0; i < placements.length; i++) {
+      const placement = placements[i];
+      const bytes = placement.source?.bytes;
+      if (!bytes) continue;
+      const image = placement.source?.type === "image/jpeg"
+        ? await doc.embedJpg(bytes)
+        : await doc.embedPng(bytes);
+      const page = doc.getPage(placement.pageIndex);
+      const { width, height } = page.getSize();
+      const rect = placement.rect || { x: 0.36, y: 0.72, w: 0.28 };
+      const w = rect.w * width;
+      const h = w * (image.height / image.width);
+      page.drawImage(image, {
+        x: Math.min(width - w, Math.max(0, rect.x * width)),
+        y: Math.min(height - h, Math.max(0, height - rect.y * height - h)),
+        width: w,
+        height: h,
+      });
+      if (onProgress) onProgress(((i + 1) / Math.max(1, placements.length)) * 90);
+    }
     const base = files[0].name.replace(/\.pdf$/i, "");
-    const res = { outputs: [out(base + "-ditandatangani.pdf", await doc.save(), doc.getPageCount())] };
+    const res = { outputs: [out(opts.outputName || base + "-ditandatangani.pdf", await doc.save(), doc.getPageCount())] };
     if (onProgress) onProgress(100);
     return res;
+  }
+
+  async function protect(files, opts, onProgress) {
+    const rec = E().files.get(files[0].id);
+    if (!rec?.bytes) throw new Error("PDF_SOURCE_MISSING");
+    if (hasEncryptionMarkers(rec.bytes)) throw new Error("PDF_ALREADY_ENCRYPTED");
+    const password = String(opts.password || opts.pw || "");
+    if (!password) throw new Error("PDF_PASSWORD_REQUIRED");
+    if (onProgress) onProgress(8);
+    await tick();
+    const encrypted = await encryptPdfWithQpdf(rec.bytes, password, opts.ownerPassword || randomOwnerPassword());
+    if (onProgress) onProgress(96);
+    await tick();
+    const base = rec.name.replace(/\.pdf$/i, "");
+    const res = { outputs: [out(opts.outputName || base + "-terkunci.pdf", encrypted, rec.pageCount)] };
+    if (onProgress) onProgress(100);
+    return res;
+  }
+
+  async function ocr(files, opts = {}, onProgress) {
+    const rec = E().files.get(files[0]?.id);
+    if (!rec?.bytes) throw new Error("PDF_SOURCE_MISSING");
+    if (hasEncryptionMarkers(rec.bytes)) throw new Error("PDF_ALREADY_ENCRYPTED");
+
+    const signal = opts.signal;
+    assertNotCancelled(signal);
+
+    const live = liveOcrPages(files, opts);
+    const pageCount = live.length;
+    const selectedIndexes = selectedOcrPageIndexes(opts, pageCount);
+    const engine = opts.engine || await createTesseractOcrEngine({
+      language: opts.language || "ind+eng",
+      quality: opts.quality || "balanced",
+      onStatus: (status) => {
+        if (onProgress && status.progress) {
+          onProgress(Math.min(96, Math.max(1, status.progress * 100)), { phase: status.status || "ocr" });
+        }
+      },
+    });
+
+    const processedPages = [];
+    const skippedTextPages = [];
+    const failedPages = [];
+    const lowConfidencePages = [];
+    const overlays = {};
+    try {
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const sourceDocs = new Map();
+
+      for (let i = 0; i < live.length; i++) {
+        assertNotCancelled(signal);
+        const pageRef = live[i];
+        if (!sourceDocs.has(pageRef.fileId)) sourceDocs.set(pageRef.fileId, await srcDoc(pageRef.fileId));
+        const src = sourceDocs.get(pageRef.fileId);
+        const [copied] = await doc.copyPages(src, [pageRef.srcIndex]);
+        if (pageRef.rotation) copied.setRotation(degrees(((copied.getRotation().angle + pageRef.rotation) % 360 + 360) % 360));
+        doc.addPage(copied);
+      }
+      const copiedPages = doc.getPages();
+
+      const totalToCheck = selectedIndexes ? selectedIndexes.size : live.length;
+      if (!totalToCheck) throw new Error("OCR_NO_PAGES_SELECTED");
+      let completed = 0;
+
+      for (let i = 0; i < live.length; i++) {
+        const pageNumber = i + 1;
+        const pageRef = live[i];
+        if (selectedIndexes && !selectedIndexes.has(i)) continue;
+        assertNotCancelled(signal);
+
+        onProgress && onProgress((completed / totalToCheck) * 88, {
+          phase: "detect",
+          page: pageNumber,
+          total: live.length,
+          done: completed,
+        });
+
+        const hasNativeText = opts.pageMode !== "all" && await engine.analyzePageText(pageRef.fileId, pageRef.srcIndex + 1, pageRef);
+        if (hasNativeText) {
+          skippedTextPages.push(pageNumber);
+          completed++;
+          onProgress && onProgress((completed / totalToCheck) * 88, {
+            phase: "skipped",
+            page: pageNumber,
+            total: live.length,
+            done: completed,
+          });
+          continue;
+        }
+
+        try {
+          const result = await engine.recognizePage(pageRef.fileId, pageRef.srcIndex + 1, pageRef, (detail) => {
+            onProgress && onProgress((completed / totalToCheck) * 88, {
+              ...detail,
+              page: pageNumber,
+              total: live.length,
+              done: completed,
+            });
+          });
+          assertNotCancelled(signal);
+          const overlay = addInvisibleOcrText(copiedPages[i], font, result);
+          overlays[pageNumber] = overlay;
+          processedPages.push(pageNumber);
+          const confidentWords = overlay.filter((word) => Number.isFinite(word.confidence));
+          if (confidentWords.length) {
+            const avg = confidentWords.reduce((sum, word) => sum + word.confidence, 0) / confidentWords.length;
+            if (avg < 62) lowConfidencePages.push(pageNumber);
+          }
+        } catch (error) {
+          if (error?.message === "OCR_CANCELLED") throw error;
+          failedPages.push({ page: pageNumber, message: error?.message || "OCR_PAGE_FAILED" });
+        }
+        completed++;
+        onProgress && onProgress((completed / totalToCheck) * 88, {
+          phase: "page-complete",
+          page: pageNumber,
+          total: live.length,
+          done: completed,
+        });
+        await tick();
+      }
+
+      if (!processedPages.length && skippedTextPages.length && !failedPages.length && opts.pageMode !== "all") {
+        return {
+          outputs: [],
+          ocr: {
+            noScannedPages: true,
+            processedPages,
+            skippedTextPages,
+            failedPages,
+            lowConfidencePages,
+            overlays,
+          },
+        };
+      }
+
+      assertNotCancelled(signal);
+      const bytes = await doc.save({ useObjectStreams: false });
+      onProgress && onProgress(100, { phase: "done", total: live.length, done: processedPages.length });
+      return {
+        outputs: [out(opts.outputName || rec.name.replace(/\.pdf$/i, "-ocr.pdf"), bytes, pageCount)],
+        ocr: {
+          processedPages,
+          skippedTextPages,
+          failedPages,
+          lowConfidencePages,
+          overlays,
+        },
+      };
+    } finally {
+      await engine.terminate?.();
+    }
   }
 
   // Simulated ops (encryption + OCR are out of scope for this prototype engine):
@@ -300,5 +634,7 @@ import { PdfEngine } from "./pdfEngine.js";
 
 export const PdfProcess = {
     clearCache, assemble, split, parseRange, compress, watermark, imagesToPdf,
-    pdfToImages, pageNumbers, flatten, metadata, readMetadata, sign, passthrough,
+    pdfToImages, pageNumbers, flatten, metadata, readMetadata, sign, protect,
+    ocr, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
+    sourceHasDigitalSignature, sourceHasEncryption,
   };

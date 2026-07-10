@@ -145,6 +145,11 @@
   .ws-top-nav [role="group"] {
     flex: none;
   }
+
+  .pdf-preview-zoom-controls {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

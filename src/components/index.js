@@ -16,6 +16,7 @@ export * from "./workspace/ContextMenu.jsx";
 export * from "./workspace/DownloadCard.jsx";
 export * from "./workspace/Modal.jsx";
 export * from "./workspace/PageCard.jsx";
+export * from "./workspace/PdfDocumentPreview.jsx";
 export * from "./workspace/PageNavigator.jsx";
 export * from "./workspace/Toast.jsx";
 export * from "./workspace/Toolbar.jsx";

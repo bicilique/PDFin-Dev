@@ -57,10 +57,23 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
   function reset() { for (const id of [...files.keys()]) removeFile(id); }
 
-  // Render page (1-based) of file to a canvas at given CSS pixel width. Cached.
-  async function renderPage(fileId, pageNo, width) {
-    const key = fileId + ":" + pageNo + ":" + Math.round(width);
-    if (canvasCache.has(key)) return canvasCache.get(key);
+  function cloneCanvas(source) {
+    const canvas = document.createElement("canvas");
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.drawImage(source, 0, 0);
+    canvas.style.width = "100%";
+    canvas.style.height = "auto";
+    canvas.style.display = "block";
+    return canvas;
+  }
+
+  // Render page (1-based) of file to a fresh canvas at given CSS pixel width.
+  // Cached canvases are kept as render sources only; callers must never share DOM nodes.
+  async function renderPage(fileId, pageNo, width, rotation = 0) {
+    const key = fileId + ":" + pageNo + ":" + Math.round(width) + ":" + (((rotation % 360) + 360) % 360);
+    if (canvasCache.has(key)) return cloneCanvas(canvasCache.get(key));
     const rec = files.get(fileId);
     if (!rec) return null;
     let canvas;
@@ -85,7 +98,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
     canvas.style.display = "block";
     if (canvasCache.size >= CACHE_MAX) canvasCache.delete(canvasCache.keys().next().value);
     canvasCache.set(key, canvas);
-    return canvas;
+    return cloneCanvas(canvas);
   }
 
   async function pageSize(fileId, pageNo) {

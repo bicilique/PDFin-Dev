@@ -1,10 +1,10 @@
 import React from "react";
-import { Badge, Button, IconButton, PrivacyPill, Toast } from "../../components/index.js";
+import { Badge, Button, IconButton, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
 import { PDFIN_T } from "./i18n.js";
 import { PdfEngine } from "./engine/pdfEngine.js";
 import { PdfProcess } from "./engine/pdfProcess.js";
-import { EmptyState, ErrorView, ProcessingView, ProcessActionBar, QuickSwitcher, SuccessView, WorkspaceTopNav } from "./WorkspaceShell.jsx";
-import { DocPreview, PageGrid, Sidebar } from "./WorkspaceViews.jsx";
+import { EmptyState, ErrorView, ProcessingView, ProcessActionBar, QuickSwitcher, SuccessView, WorkspaceTopNav, WSIcons } from "./WorkspaceShell.jsx";
+import { DocPreview, LazyThumb, PageGrid, Sidebar } from "./WorkspaceViews.jsx";
 import { TOOL_DEFS } from "./tools/tools-1.jsx";
 import "./tools/tools-2.jsx";
 import "./tools/tools-3.jsx";
@@ -17,6 +17,19 @@ const TOOL_IDS = WORKSPACE_TOOL_IDS;
 
 let uidCounter = 1;
 const nextUid = () => "p" + uidCounter++;
+let pendingFileCounter = 1;
+const nextPendingFileId = () => "pending-" + pendingFileCounter++;
+
+function createPageInstance(data) {
+  const pageInstanceId = data.pageInstanceId || nextUid();
+  return {
+    ...data,
+    pageInstanceId,
+    uid: pageInstanceId,
+  };
+}
+
+const pageIdentity = (page) => page.pageInstanceId || page.uid;
 
 function hashTool() {
   const h = (location.hash || "").replace("#", "");
@@ -43,6 +56,45 @@ function useMediaQuery(query) {
   return matches;
 }
 
+function SplitSelectionToolbar({ lang, selectedCount, totalCount, onSelectAll, onClear }) {
+  const allSelected = totalCount > 0 && selectedCount === totalCount;
+  return (
+    <div style={{
+      position: "sticky",
+      top: 48,
+      zIndex: 4,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      flexWrap: "wrap",
+      margin: "0 0 14px",
+      padding: "10px 12px",
+      border: "1px solid var(--border-brand)",
+      borderRadius: "var(--radius-md)",
+      background: "var(--surface-card)",
+      boxShadow: "var(--shadow-card)",
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+        <span style={{ font: "var(--weight-semibold) 12.5px/1.25 var(--font-sans)", color: "var(--text-heading)" }}>
+          {lang === "id" ? `${selectedCount} dari ${totalCount} halaman dipilih` : `${selectedCount} of ${totalCount} pages selected`}
+        </span>
+        <span style={{ font: "11.5px/1.35 var(--font-sans)", color: "var(--text-muted)" }}>
+          {lang === "id" ? "Mode Pilih halaman aktif. Halaman terpilih akan dibuat menjadi 1 file PDF." : "Select pages mode is active. Selected pages will become 1 PDF file."}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Button size="sm" variant="secondary" disabled={!totalCount} onClick={allSelected ? onClear : onSelectAll}>
+          {allSelected ? (lang === "id" ? "Hapus semua" : "Clear all") : (lang === "id" ? "Pilih semua" : "Select all")}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={!selectedCount} onClick={onClear}>
+          {lang === "id" ? "Hapus pilihan" : "Clear selection"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   const [lang, setLang] = React.useState(localStorage.getItem("pdfin-ws-lang") || initialLang);
   const [theme, setTheme] = React.useState(localStorage.getItem("pdfin-ws-theme") || initialTheme);
@@ -60,9 +112,19 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   const [inspOpen, setInspOpen] = React.useState(true);
   const [activeCompactPanel, setActiveCompactPanel] = React.useState("files");
   const [toasts, setToasts] = React.useState([]);
+  const [pageGridZoom, setPageGridZoom] = React.useState(100);
+  const [previewPageUid, setPreviewPageUid] = React.useState(null);
+  const [previewCurrentPage, setPreviewCurrentPage] = React.useState(1);
+  const [workspaceDrag, setWorkspaceDrag] = React.useState(false);
+  const [lastMovedPageUid, setLastMovedPageUid] = React.useState(null);
+  const [focusFirstSelectionTick, setFocusFirstSelectionTick] = React.useState(0);
   const [recent, setRecent] = React.useState(() => { try { return JSON.parse(localStorage.getItem("pdfin-ws-recent") || "[]"); } catch (e) { return []; } });
   const undoStack = React.useRef([]);
   const cancelled = React.useRef(false);
+  const duplicatingRef = React.useRef(false);
+  const processingRef = React.useRef(false);
+  const processingAbortRef = React.useRef(null);
+  const previewNavigationRef = React.useRef(null);
   const t = PDFIN_T[lang];
   const def = DEFS[tool];
   const isCompact = useMediaQuery("(max-width: 1023px)");
@@ -94,7 +156,10 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
 
   const toast = (msg, tone = "neutral", action = null) => {
     const id = Date.now() + Math.random();
-    setToasts((ts) => [...ts, { id, msg, tone, action }]);
+    setToasts((ts) => {
+      const withoutSame = ts.filter((x) => x.msg !== msg);
+      return [...withoutSame, { id, msg, tone, action }].slice(-2);
+    });
     setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), 5000);
   };
 
@@ -115,30 +180,85 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   };
 
   const addFiles = async (fileList) => {
-    try {
-      const added = [];
-      for (const f of fileList) {
-        const rec = def.acceptImages ? await PdfEngine.loadImage(f) : await PdfEngine.loadFile(f);
-        added.push(rec);
+    const incoming = [...(fileList || [])];
+    if (!incoming.length) return;
+
+    if (!def.multiFile && files.length) {
+      files.forEach((f) => PdfEngine.removeFile(f.id));
+      setFiles([]);
+      setPages([]);
+    }
+
+    setStage("ready");
+    setResult(null);
+    setErrMsg("");
+
+    const seen = new Set((def.multiFile ? files : []).map((f) => f.fingerprint).filter(Boolean));
+    const addedReadyNames = [];
+
+    for (const file of incoming) {
+      const fingerprint = await fileFingerprint(file);
+      const validation = validateIncomingFile(file, fingerprint, seen, def.acceptImages, lang);
+      const pendingId = nextPendingFileId();
+      const pendingRecord = {
+        id: pendingId,
+        name: file.name || (def.acceptImages ? "gambar" : "dokumen.pdf"),
+        size: file.size || 0,
+        pageCount: 0,
+        isImage: !!def.acceptImages,
+        fingerprint,
+        status: validation.ok ? "loading" : validation.status,
+        error: validation.ok ? "" : validation.message,
+      };
+
+      setFiles((prev) => [...prev, pendingRecord]);
+
+      if (!validation.ok) {
+        toast(validation.message, validation.status === "duplicate" ? "info" : "error");
+        continue;
       }
-      let base = def.multiFile ? files : [];
-      if (!def.multiFile && files.length) { files.forEach((f) => PdfEngine.removeFile(f.id)); setPages([]); }
-      const nextFiles = [...base, ...added.map((r) => ({ id: r.id, name: r.name, size: r.size, pageCount: r.pageCount, isImage: !!r.isImage }))];
-      setFiles(nextFiles);
-      setPages((prev) => {
-        const kept = def.multiFile ? prev : [];
-        const extra = [];
-        added.forEach((r) => { for (let i = 0; i < r.pageCount; i++) extra.push({ uid: nextUid(), fileId: r.id, srcIndex: i, rotation: 0 }); });
-        return [...kept, ...extra];
-      });
-      setStage("ready");
-      const names = [...new Set([...added.map((r) => r.name), ...recent])].slice(0, 6);
+
+      seen.add(fingerprint);
+      try {
+        const rec = def.acceptImages ? await PdfEngine.loadImage(file) : await PdfEngine.loadFile(file);
+        const readyRecord = {
+          id: rec.id,
+          name: rec.name,
+          size: rec.size,
+          pageCount: rec.pageCount,
+          isImage: !!rec.isImage,
+          fingerprint,
+          status: "ready",
+          error: "",
+        };
+        setFiles((prev) => prev.map((f) => (f.id === pendingId ? readyRecord : f)));
+        setPages((prev) => {
+          const kept = def.multiFile ? prev : [];
+          const extra = [];
+          for (let i = 0; i < rec.pageCount; i++) {
+            extra.push(createPageInstance({
+              fileId: rec.id,
+              srcIndex: i,
+              rotation: 0,
+              sourceName: rec.name,
+              sourcePageNumber: i + 1,
+            }));
+          }
+          return [...kept, ...extra];
+        });
+        addedReadyNames.push(rec.name);
+      } catch (e) {
+        console.warn(e);
+        const message = classifyFileError(e, lang);
+        setFiles((prev) => prev.map((f) => (f.id === pendingId ? { ...f, status: "error", error: message } : f)));
+        toast(message, "error");
+      }
+    }
+
+    if (addedReadyNames.length) {
+      const names = [...new Set([...addedReadyNames, ...recent])].slice(0, 6);
       setRecent(names);
       localStorage.setItem("pdfin-ws-recent", JSON.stringify(names));
-    } catch (e) {
-      console.warn(e);
-      setErrMsg(lang === "id" ? "File tidak dapat dibaca. Pastikan file PDF valid dan tidak terenkripsi." : "The file could not be read. Make sure it is a valid, unencrypted PDF.");
-      setStage("error");
     }
   };
 
@@ -181,44 +301,151 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
 
   // ---- page ops with undo ----
   const snapshot = () => { undoStack.current.push(pages); if (undoStack.current.length > 30) undoStack.current.shift(); };
+  const pushUndo = (prev) => { undoStack.current.push(prev); if (undoStack.current.length > 30) undoStack.current.shift(); };
   const undo = () => {
     const prev = undoStack.current.pop();
     if (prev) { setPages(prev); setSelection(new Set()); }
   };
   const pageOps = {
-    reorder: (from, to) => { snapshot(); setPages((ps) => { const n = [...ps]; const [m] = n.splice(from, 1); n.splice(to, 0, m); return n; }); },
-    rotate: (uids, delta) => { snapshot(); setPages((ps) => ps.map((p) => uids.includes(p.uid) ? { ...p, rotation: ((p.rotation + delta) % 360 + 360) % 360 } : p)); },
+    reorder: (activeUid, overUid) => {
+      setPages((ps) => {
+        const live = ps.filter((p) => !p.deleted);
+        const from = live.findIndex((p) => pageIdentity(p) === activeUid);
+        const to = live.findIndex((p) => pageIdentity(p) === overUid);
+        if (from < 0 || to < 0 || from === to) return ps;
+        pushUndo(ps);
+        const liveNext = [...live];
+        const [m] = liveNext.splice(from, 1);
+        liveNext.splice(to, 0, m);
+        const deleted = ps.filter((p) => p.deleted);
+        setLastMovedPageUid(activeUid);
+        return [...liveNext, ...deleted];
+      });
+    },
+    move: (uid, direction) => {
+      setPages((ps) => {
+        const live = ps.filter((p) => !p.deleted);
+        const from = live.findIndex((p) => pageIdentity(p) === uid);
+        if (from < 0) return ps;
+        const to = direction === "next" ? from + 1 : from - 1;
+        if (to < 0 || to >= live.length) return ps;
+        pushUndo(ps);
+        const liveNext = [...live];
+        const [m] = liveNext.splice(from, 1);
+        liveNext.splice(to, 0, m);
+        const deleted = ps.filter((p) => p.deleted);
+        setLastMovedPageUid(uid);
+        return [...liveNext, ...deleted];
+      });
+    },
+    moveByIndex: (from, to) => {
+      setPages((ps) => {
+        const live = ps.filter((p) => !p.deleted);
+        if (from < 0 || to < 0 || from >= live.length || to >= live.length || from === to) return ps;
+        pushUndo(ps);
+        const liveNext = [...live];
+        const [m] = liveNext.splice(from, 1);
+        liveNext.splice(to, 0, m);
+        const deleted = ps.filter((p) => p.deleted);
+        setLastMovedPageUid(pageIdentity(m));
+        return [...liveNext, ...deleted];
+      });
+    },
+    rotate: (uids, delta) => { snapshot(); setPages((ps) => ps.map((p) => uids.includes(pageIdentity(p)) ? { ...p, rotation: ((p.rotation + delta) % 360 + 360) % 360 } : p)); },
     remove: (uids) => {
       snapshot();
-      setPages((ps) => ps.filter((p) => !uids.includes(p.uid)));
+      setPages((ps) => ps.filter((p) => !uids.includes(pageIdentity(p))));
       setSelection(new Set());
       toast(lang === "id" ? `${uids.length} halaman dihapus.` : `${uids.length} page(s) deleted.`, "neutral",
         <Button variant="ghost" size="sm" onClick={undo}>{t.stage.undo}</Button>);
     },
     duplicate: (uids) => {
-      snapshot();
-      setPages((ps) => ps.flatMap((p) => uids.includes(p.uid) ? [p, { ...p, uid: nextUid() }] : [p]));
+      if (duplicatingRef.current) return;
+      duplicatingRef.current = true;
+      queueMicrotask(() => { duplicatingRef.current = false; });
+      const requested = new Set(uids);
+      setPages((ps) => {
+        const live = ps.filter((p) => !p.deleted);
+        const selectedInOrder = live.filter((p) => requested.has(pageIdentity(p)));
+        if (!selectedInOrder.length) return ps;
+        pushUndo(ps);
+        const duplicateIds = [];
+        const liveNext = live.flatMap((p) => {
+          if (!requested.has(pageIdentity(p))) return [p];
+          const copy = createPageInstance({
+            ...p,
+            pageInstanceId: undefined,
+            uid: undefined,
+            duplicateOf: pageIdentity(p),
+            transientBadge: lang === "id" ? "Salinan" : "Copy",
+          });
+          duplicateIds.push(copy.pageInstanceId);
+          return [p, copy];
+        });
+        const deleted = ps.filter((p) => p.deleted);
+        setSelection(new Set(duplicateIds));
+        setLastMovedPageUid(duplicateIds[0] || null);
+        toast(lang === "id" ? `${duplicateIds.length} halaman diduplikat.` : `${duplicateIds.length} page(s) duplicated.`, "neutral",
+          <Button variant="ghost" size="sm" onClick={undo}>{t.stage.undo}</Button>);
+        return [...liveNext, ...deleted];
+      });
     },
   };
 
-  const ctx = { files, pages, selection, setSelection, pageOps };
+  const validFiles = files.filter((f) => f.status === "ready");
+  const loadingFiles = files.filter((f) => f.status === "loading");
+  const ctx = {
+    files,
+    validFiles,
+    loadingFiles,
+    pages,
+    selection,
+    setSelection,
+    pageOps,
+    previewPage: previewCurrentPage,
+    goToPreviewPage: (pageNumber) => previewNavigationRef.current?.goToPage(pageNumber),
+  };
 
   const run = async () => {
+    if (processingRef.current || processDisabled) return;
+    processingRef.current = true;
     cancelled.current = false;
+    const abortController = new AbortController();
+    processingAbortRef.current = abortController;
     setStage("processing"); setProgress(0);
     setProcLabel(def.processLabel ? def.processLabel(t, lang) : t.stage.processing);
     const t0 = performance.now();
     try {
-      const res = await def.process(ctx, opts, (pct) => setProgress(Math.round(pct)), lang);
+      const res = await def.process(ctx, { ...opts, signal: abortController.signal }, (pct, detail) => {
+        setProgress(Math.round(pct));
+        if (def.progressLabel && detail) setProcLabel(def.progressLabel(detail, t, lang));
+      }, lang);
       if (cancelled.current) return;
+      if (def.afterProcessOpts) setOpts((current) => def.afterProcessOpts(current, res));
       setResult({ ...res, ms: performance.now() - t0 });
       setStage("done");
     } catch (e) {
-      console.warn(e);
-      if (!cancelled.current) { setErrMsg(""); setStage("error"); }
+      if (tool !== "protect") console.warn(e);
+      if (!cancelled.current) {
+        const message = tool === "protect"
+          ? (lang === "id" ? "PDF tidak dapat dikunci. Pastikan file valid, belum dilindungi password, dan coba lagi." : "The PDF could not be protected. Make sure it is valid, not already password-protected, and try again.")
+          : "";
+        setErrMsg(message);
+        setStage("error");
+      }
+    } finally {
+      processingRef.current = false;
+      if (processingAbortRef.current === abortController) processingAbortRef.current = null;
+      if (def.sanitizeAfterProcess) setOpts((current) => def.sanitizeAfterProcess(current));
     }
   };
-  const cancel = () => { cancelled.current = true; setStage(files.length ? "ready" : "empty"); };
+  const cancel = () => {
+    cancelled.current = true;
+    processingRef.current = false;
+    processingAbortRef.current?.abort();
+    if (def.sanitizeAfterProcess) setOpts((current) => def.sanitizeAfterProcess(current));
+    setStage(files.length ? "ready" : "empty");
+  };
 
   const download = (o) => {
     const a = document.createElement("a");
@@ -239,13 +466,50 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
 
   // ---- main content by stage ----
   const selectable = def.selectable != null ? def.selectable : def.selectableWhen ? def.selectableWhen(opts) : false;
-  const processDisabled = def.disabled ? def.disabled(ctx, opts) : false;
+  const processDisabled = def.disabled ? def.disabled(ctx, opts, lang) : false;
   const disabledReason = processDisabled
     ? (def.disabledReason ? def.disabledReason(ctx, opts, t, lang) : t.toolRequirements[tool])
     : "";
   const nextAction = processDisabled
     ? disabledReason
     : (def.nextAction ? def.nextAction(ctx, opts, t, lang) : t.cta.ready);
+  const processLabel = def.actionLabel ? def.actionLabel(ctx, opts, t, lang) : t.toolNames[tool];
+
+  const splitLivePages = pages.filter((p) => !p.deleted);
+  const splitRangePageUids = React.useMemo(() => {
+    if (tool !== "split" || opts.mode !== "range") return new Set();
+    const parsed = PdfProcess.parseRange(opts.range, splitLivePages.length);
+    return new Set(parsed.map((pageIndex) => splitLivePages[pageIndex] ? pageIdentity(splitLivePages[pageIndex]) : null).filter(Boolean));
+  }, [tool, opts.mode, opts.range, splitLivePages.map((p) => pageIdentity(p)).join("|")]);
+
+  const activateSplitSelection = React.useCallback(() => {
+    setOpts((next) => ({ ...next, mode: "selected" }));
+    setFocusFirstSelectionTick((tick) => tick + 1);
+  }, []);
+
+  const toggleSplitPageSelection = React.useCallback((uid) => {
+    setOpts((next) => next.mode === "selected" ? next : { ...next, mode: "selected" });
+    setSelection((sel) => {
+      const next = new Set(sel);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  }, []);
+
+  const splitSelectionToolbar = tool === "split" && opts.mode === "selected" ? (
+    <SplitSelectionToolbar
+      lang={lang}
+      selectedCount={selection.size}
+      totalCount={splitLivePages.length}
+      onSelectAll={() => setSelection(new Set(splitLivePages.map((p) => pageIdentity(p))))}
+      onClear={() => setSelection(new Set())}
+    />
+  ) : null;
+  const splitHeaderActions = tool === "split" && stage === "ready" ? (
+    <Button size="sm" variant={opts.mode === "selected" ? "secondary" : "primary"} onClick={activateSplitSelection} icon={WSIcons.check(14)}>
+      {lang === "id" ? "Pilih halaman" : "Select pages"}
+    </Button>
+  ) : null;
   let main;
   if (stage === "processing") main = <ProcessingView t={t} progress={progress} label={procLabel} onCancel={cancel} />;
   else if (stage === "done") main = (
@@ -258,15 +522,38 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   else if (stage === "error") main = <ErrorView t={t} message={errMsg} onRetry={() => setStage(files.length ? "ready" : "empty")} onRestart={() => switchToolResetSame()} />;
   else if (stage === "empty") main = <EmptyState t={t} tool={tool} onFiles={addFiles} onSample={addSample} acceptImages={def.acceptImages} />;
   else if (def.view === "preview") main = (
-    <DocPreview t={t} pages={pages} overlay={def.overlay ? def.overlay(opts, setOpts) : null} compact={isCompact} />
+    <DocPreview
+      pages={pages}
+      lang={lang}
+      overlay={def.overlay ? def.overlay(opts, setOpts) : null}
+      compact={isCompact}
+      previewKind={def.previewKind || "source"}
+      previewKey={def.previewKey ? def.previewKey(opts) : JSON.stringify(opts)}
+      navigationRef={previewNavigationRef}
+      onCurrentPageChange={setPreviewCurrentPage}
+    />
   );
   else main = (
     <PageGrid t={t} pages={pages} selection={selection}
       setSelection={selectable ? setSelection : () => {}}
-      cardWidth={isMobile ? 136 : 148}
+      cardWidth={Math.round((isMobile ? 136 : 148) * (pageGridZoom / 100))}
       compact={isCompact}
       selectable={selectable}
+      zoom={pageGridZoom}
+      onZoomIn={() => setPageGridZoom((z) => Math.min(180, z + 10))}
+      onZoomOut={() => setPageGridZoom((z) => Math.max(70, z - 10))}
+      onZoomReset={() => setPageGridZoom(100)}
+      onPreview={(uid) => setPreviewPageUid(uid)}
+      headerActions={splitHeaderActions}
+      selectionToolbar={splitSelectionToolbar}
+      checkboxSelection={tool === "split"}
+      checkboxSelectionActive={opts.mode === "selected"}
+      onTogglePageSelection={tool === "split" ? toggleSplitPageSelection : null}
+      highlightedPageUids={splitRangePageUids}
+      focusFirstSelectionTick={focusFirstSelectionTick}
       onReorder={def.reorder ? pageOps.reorder : null}
+      onMovePage={def.reorder ? pageOps.move : null}
+      lastMovedPageUid={lastMovedPageUid}
       onRotate={def.pageActions || tool === "rotate" ? pageOps.rotate : null}
       onDelete={def.pageActions ? pageOps.remove : null}
       onDuplicate={def.pageActions ? pageOps.duplicate : null} />
@@ -288,13 +575,17 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
       compact={isCompact}
       hideShortcuts={isCompact} />
   ) : null;
+  const livePages = pages.filter((p) => !p.deleted);
+  const previewIndex = previewPageUid ? livePages.findIndex((p) => p.uid === previewPageUid) : -1;
+  const previewPage = previewIndex >= 0 ? livePages[previewIndex] : null;
   const processAction = showInspector ? (
     <ProcessActionBar
       t={t}
-      label={t.toolNames[tool]}
+      label={processLabel}
       disabled={processDisabled}
       helper={nextAction}
       onRun={run}
+      actionFields={def.ActionFields ? <def.ActionFields t={t} lang={lang} opts={opts} setOpts={setOpts} ctx={ctx} /> : null}
     />
   ) : null;
   const settingsPanel = showInspector ? (
@@ -325,7 +616,8 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
     : stage === "done"
       ? `${t.toolNames[tool]} ${t.a11y.completed}.`
       : "";
-  const liveError = stage === "error" ? (errMsg || t.error.body) : "";
+  const fileError = files.find((f) => f.status === "error" || f.status === "duplicate")?.error;
+  const liveError = stage === "error" ? (errMsg || t.error.body) : (fileError || "");
 
   const focusWorkspaceMain = (event) => {
     event.preventDefault();
@@ -333,6 +625,19 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
     if (target) {
       target.focus();
     }
+  };
+
+  const handleWorkspaceDragOver = (event) => {
+    if (event.dataTransfer?.types?.includes("Files")) {
+      event.preventDefault();
+      setWorkspaceDrag(true);
+    }
+  };
+  const handleWorkspaceDrop = (event) => {
+    if (!event.dataTransfer?.files?.length) return;
+    event.preventDefault();
+    setWorkspaceDrag(false);
+    addFiles(event.dataTransfer.files);
   };
 
   React.useEffect(() => {
@@ -355,7 +660,14 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
         </div>
       )}
       <WorkspaceTopNav t={t} tool={tool} lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} onOpenSwitcher={() => setSwitcher(true)} compact={isCompact} />
-      <div className={isCompact ? "ws-body is-compact" : "ws-body"} style={{ flex: 1, display: "flex", minHeight: 0 }} data-screen-label={t.toolNames[tool]}>
+      <div
+        className={isCompact ? "ws-body is-compact" : "ws-body"}
+        style={{ flex: 1, display: "flex", minHeight: 0 }}
+        data-screen-label={t.toolNames[tool]}
+        onDragOver={handleWorkspaceDragOver}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) setWorkspaceDrag(false); }}
+        onDrop={handleWorkspaceDrop}
+      >
         {!isCompact && sidebarPanel}
         <main id="workspace-main" tabIndex={-1} className="ws-main" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
           {stage === "ready" && (
@@ -426,13 +738,128 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
             {processAction}
           </div>
         )}
+        {workspaceDrag && (
+          <div style={{
+            position: "absolute",
+            inset: 12,
+            zIndex: 40,
+            pointerEvents: "none",
+            border: "2px dashed var(--border-brand)",
+            borderRadius: "var(--radius-lg)",
+            background: "var(--surface-brand-subtle)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-brand)",
+            font: "var(--weight-bold) 18px/1.2 var(--font-sans)",
+          }}>
+            {t.drop.title}
+          </div>
+        )}
       </div>
       {switcher && <QuickSwitcher t={t} toolIds={TOOL_IDS} current={tool} onPick={switchTool} onClose={() => setSwitcher(false)} />}
+      {previewPage && (
+        <PagePreviewModal
+          t={t}
+          lang={lang}
+          page={previewPage}
+          position={previewIndex + 1}
+          count={livePages.length}
+          onClose={() => setPreviewPageUid(null)}
+        />
+      )}
       <div style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 8, zIndex: 90, alignItems: "center" }}>
         {toasts.map((x) => (
           <Toast key={x.id} tone={x.tone} action={x.action} onDismiss={() => setToasts((ts) => ts.filter((y) => y.id !== x.id))}>{x.msg}</Toast>
         ))}
       </div>
     </div>
+  );
+}
+
+async function fileFingerprint(file) {
+  const head = file && file.slice ? await file.slice(0, 2048).arrayBuffer().catch(() => null) : null;
+  const bytes = head ? Array.from(new Uint8Array(head)).slice(0, 32).join("-") : "";
+  return [file?.name || "", file?.size || 0, file?.lastModified || 0, bytes].join(":");
+}
+
+function validateIncomingFile(file, fingerprint, seen, acceptImages, lang) {
+  const name = file?.name || "";
+  const type = file?.type || "";
+  const isPdf = type === "application/pdf" || /\.pdf$/i.test(name);
+  const isImage = /^image\/(png|jpeg)$/.test(type) || /\.(png|jpe?g)$/i.test(name);
+  const validKind = acceptImages ? isImage : isPdf;
+  const invalidMessage = acceptImages
+    ? (lang === "id" ? "File harus berupa JPG atau PNG." : "The file must be a JPG or PNG image.")
+    : (lang === "id" ? "File harus berupa PDF." : "The file must be a PDF.");
+  if (!validKind) return { ok: false, status: "error", message: invalidMessage };
+  if (seen.has(fingerprint)) {
+    return {
+      ok: false,
+      status: "duplicate",
+      message: lang === "id" ? `${name} sudah ditambahkan.` : `${name} has already been added.`,
+    };
+  }
+  return { ok: true };
+}
+
+function classifyFileError(error, lang) {
+  const text = String(error?.message || error || "").toLowerCase();
+  if (text.includes("password") || text.includes("encrypted")) {
+    return lang === "id"
+      ? "PDF terkunci kata sandi atau terenkripsi sehingga tidak dapat dibaca."
+      : "The PDF is password-protected or encrypted and cannot be read.";
+  }
+  if (text.includes("invalid") || text.includes("corrupt") || text.includes("damaged")) {
+    return lang === "id"
+      ? "File tidak dapat dibaca. PDF rusak atau tidak valid."
+      : "The file could not be read. The PDF is damaged or invalid.";
+  }
+  return lang === "id"
+    ? "File tidak dapat dibaca. Pastikan PDF valid dan tidak terkunci kata sandi."
+    : "The file could not be read. Make sure it is a valid PDF and is not password-protected.";
+}
+
+function PagePreviewModal({ t, lang, page, position, count, onClose }) {
+  const [zoom, setZoom] = React.useState(120);
+  const title = lang === "id" ? `Halaman ${position} dari ${count}` : `Page ${position} of ${count}`;
+  return (
+    <Modal title={title} onClose={onClose} width={980}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>
+            {page.sourceName || ""}{page.sourcePageNumber ? ` · ${lang === "id" ? "halaman asli" : "source page"} ${page.sourcePageNumber}` : ""}
+          </span>
+          <ZoomControl
+            value={zoom}
+            min={80}
+            max={260}
+            onZoomOut={() => setZoom((z) => Math.max(80, z - 20))}
+            onZoomIn={() => setZoom((z) => Math.min(260, z + 20))}
+            onReset={() => setZoom(120)}
+          />
+        </div>
+        <div style={{
+          maxHeight: "68vh",
+          overflow: "auto",
+          background: "var(--surface-sunken)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-md)",
+          padding: 18,
+        }}>
+          <div style={{
+            width: Math.round(620 * (zoom / 100)),
+            maxWidth: zoom <= 120 ? "100%" : "none",
+            margin: "0 auto",
+            background: "#fff",
+            border: "1px solid var(--border-default)",
+            boxShadow: "var(--shadow-card)",
+          }}>
+            <LazyThumb fileId={page.fileId} pageNo={page.srcIndex + 1} width={Math.min(900, Math.round(620 * (zoom / 100)))} />
+          </div>
+        </div>
+        <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{t.privacy}</span>
+      </div>
+    </Modal>
   );
 }

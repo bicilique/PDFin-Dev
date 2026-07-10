@@ -7,6 +7,7 @@ import React from "react";
 export function PageCard({
   pageNumber,
   selected = false,
+  highlighted = false,
   rotation = 0,
   children,
   width = 148,
@@ -44,15 +45,15 @@ export function PageCard({
         style={{
           position: "relative",
           aspectRatio: "3 / 4",
-          background: "var(--surface-card)",
-          border: selected ? "2px solid var(--action-primary)" : "1px solid var(--border-default)",
-          boxShadow: selected ? "var(--shadow-focus)" : hover ? "var(--shadow-card)" : "none",
+          border: selected ? "2px solid var(--action-primary)" : highlighted ? "2px solid var(--border-brand)" : "1px solid var(--border-default)",
+          boxShadow: selected || highlighted ? "var(--shadow-focus)" : hover ? "var(--shadow-card)" : "none",
+          background: highlighted && !selected ? "var(--surface-brand-subtle)" : "var(--surface-card)",
           borderRadius: "var(--radius-md)",
           overflow: "hidden",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: selected ? 0 : 1,
+          padding: selected || highlighted ? 0 : 1,
           transition: "box-shadow var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out)",
         }}
       >

@@ -18,4 +18,4 @@ export const WORKSPACE_TOOL_IDS = [
   "ocr",
 ];
 
-export const PROTOTYPE_TOOL_IDS = new Set(["protect", "unlock", "ocr"]);
+export const PROTOTYPE_TOOL_IDS = new Set(["unlock"]);

@@ -32,6 +32,8 @@ GITHUB_PAGES=true npm run build
 
 The GitHub Pages build serves assets from `/PDFin-Dev/`.
 
+The build also pre-renders SEO landing pages into `dist/`, including the home page, production tool pages, `sitemap.xml`, `robots.txt`, and a GitHub Pages `404.html` fallback. Prototype tools remain reachable for users but are marked `noindex` until their processing is final.
+
 ## Project layout
 
 ```text

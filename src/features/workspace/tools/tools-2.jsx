@@ -1,6 +1,6 @@
 import React from "react";
 import { Alert, Button, Input, Select, Switch } from "../../../components/index.js";
-import { Field, Segmented, SliderRow, PosGrid, TX, TOOL_DEFS } from "./tools-1.jsx";
+import { Field, Segmented, SliderRow, PosGrid, TX, TOOL_DEFS, getScopeError, pageScopeIncludes } from "./tools-1.jsx";
 import { PdfProcess } from "../engine/pdfProcess.js";
 
 // PDFin workspace — tool defs part 2: watermark, images->PDF, PDF->image, page numbers, flatten.
@@ -14,11 +14,22 @@ function cssAnchor(align) {
   };
 }
 
+function appliedNumber(opts, pageIndex, totalPages) {
+  const start = Number(opts.startAt) || 0;
+  let offset = 0;
+  for (let i = 0; i < pageIndex; i += 1) {
+    if (pageScopeIncludes(opts, i, totalPages)) offset += 1;
+  }
+  return start + offset;
+}
+
 TOOL_DEFS.watermark = {
   view: "preview", multiFile: true,
-  defaults: { kind: "text", text: "RAHASIA", opacity: 24, rotation: -35, size: 40, align: "middle-center", imageBytes: null, imageType: null, imageUrl: null },
-  Panel: ({ t, lang, opts, setOpts }) => {
+  previewKind: "processed",
+  defaults: { scope: "all", range: "1-3", kind: "text", text: "RAHASIA", opacity: 24, rotation: -35, size: 40, align: "middle-center", color: "#6b6787", imageBytes: null, imageType: null, imageUrl: null },
+  Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const imgRef = React.useRef(null);
+    const pageCount = ctx.pages.filter((p) => !p.deleted).length;
     React.useEffect(() => () => {
       if (opts.imageUrl) URL.revokeObjectURL(opts.imageUrl);
     }, [opts.imageUrl]);
@@ -27,6 +38,7 @@ TOOL_DEFS.watermark = {
         <Alert tone="info">{TX(lang,
           "Pratinjau watermark mengikuti jenis, ukuran, rotasi, dan penempatan di panel ini.",
           "The watermark preview follows the type, size, rotation, and placement in this panel.")}</Alert>
+        <ScopeControl lang={lang} opts={opts} setOpts={setOpts} pageCount={pageCount} />
         <Field label={TX(lang, "Jenis watermark", "Watermark type")}>
           <Segmented value={opts.kind} onChange={(kind) => setOpts({ ...opts, kind })} options={[
             { value: "text", label: TX(lang, "Teks", "Text") },
@@ -49,16 +61,20 @@ TOOL_DEFS.watermark = {
             }} />
           </Field>
         )}
+        {opts.kind === "text" && (
+          <Input label={TX(lang, "Warna", "Color")} type="color" value={opts.color} onChange={(e) => setOpts({ ...opts, color: e.target.value })} />
+        )}
         <SliderRow label={TX(lang, "Opasitas", "Opacity")} value={opts.opacity} min={5} max={100} unit="%" onChange={(opacity) => setOpts({ ...opts, opacity })} />
         <SliderRow label={TX(lang, "Rotasi", "Rotation")} value={opts.rotation} min={-90} max={90} step={5} unit="°" onChange={(rotation) => setOpts({ ...opts, rotation })} />
         <SliderRow label={TX(lang, "Ukuran", "Size")} value={opts.size} min={10} max={100} unit="%" onChange={(size) => setOpts({ ...opts, size })} />
         <Field label={TX(lang, "Penempatan", "Placement")}>
-          <PosGrid value={opts.align} onChange={(align) => setOpts({ ...opts, align })} />
+          <PosGrid lang={lang} value={opts.align} onChange={(align) => setOpts({ ...opts, align })} />
         </Field>
       </div>
     );
   },
-  overlay: (opts) => (p, i) => {
+  overlay: (opts) => (p, i, total) => {
+    if (!pageScopeIncludes(opts, i, total)) return null;
     const pos = cssAnchor(opts.align);
     return (
       <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
@@ -68,16 +84,16 @@ TOOL_DEFS.watermark = {
           opacity: opts.opacity / 100, whiteSpace: "nowrap",
         }}>
           {opts.kind === "text"
-            ? <span style={{ font: `700 ${Math.max(10, opts.size * 1.5)}px/1 Helvetica, Arial, sans-serif`, color: "#6b6787", letterSpacing: "0.02em" }}>{opts.text}</span>
+            ? <span style={{ font: `700 ${Math.max(10, opts.size * 1.5)}px/1 Helvetica, Arial, sans-serif`, color: opts.color || "#6b6787", letterSpacing: "0.02em" }}>{opts.text}</span>
             : opts.imageUrl && <img src={opts.imageUrl} alt="" style={{ width: `${opts.size * 4}px` }} />}
         </div>
       </div>
     );
   },
-  disabled: (ctx, opts) => (opts.kind === "text" ? !opts.text.trim() : !opts.imageBytes),
+  disabled: (ctx, opts, lang) => !!getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || (opts.kind === "text" ? !opts.text.trim() : !opts.imageBytes),
   disabledReason: (ctx, opts, t, lang) => opts.kind === "text"
-    ? TX(lang, "Isi teks watermark sebelum memproses.", "Enter watermark text before processing.")
-    : TX(lang, "Pilih gambar watermark sebelum memproses.", "Choose a watermark image before processing."),
+    ? (getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || TX(lang, "Isi teks watermark sebelum memproses.", "Enter watermark text before processing."))
+    : (getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || TX(lang, "Pilih gambar watermark sebelum memproses.", "Choose a watermark image before processing.")),
   nextAction: (ctx, opts, t, lang) => TX(lang, "Watermark akan diterapkan secara lokal ke pratinjau PDF.", "The watermark will be applied locally to the previewed PDF."),
   successSummary: (result, ctx, opts, t, lang) => {
     const files = result.outputs.length;
@@ -154,14 +170,17 @@ TOOL_DEFS.pdf2img = {
 
 TOOL_DEFS.pagenum = {
   view: "preview", multiFile: true,
-  defaults: { position: "bottom-center", format: "n", font: "helvetica", fontSize: 11, color: "ink", margin: 28 },
-  Panel: ({ t, lang, opts, setOpts }) => (
+  previewKind: "processed",
+  defaults: { scope: "all", range: "1-3", excludeFirst: false, startAt: 1, position: "bottom-center", format: "n", font: "helvetica", fontSize: 11, color: "ink", margin: 28 },
+  Panel: ({ t, lang, opts, setOpts, ctx }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Alert tone="info">{TX(lang,
         "Pratinjau nomor halaman menunjukkan posisi dan gaya sebelum PDF diproses.",
         "The page number preview shows position and style before the PDF is processed.")}</Alert>
+      <ScopeControl lang={lang} opts={opts} setOpts={setOpts} pageCount={ctx.pages.filter((p) => !p.deleted).length} allowExcludeFirst />
+      <Input label={TX(lang, "Mulai dari", "Start at")} type="number" min="0" value={opts.startAt} onChange={(e) => setOpts({ ...opts, startAt: Number(e.target.value) || 0 })} />
       <Field label={TX(lang, "Posisi", "Position")}>
-        <PosGrid value={opts.position} onChange={(position) => setOpts({ ...opts, position })} rows={["top", "bottom"]} />
+        <PosGrid lang={lang} value={opts.position} onChange={(position) => setOpts({ ...opts, position })} rows={["top", "bottom"]} />
       </Field>
       <Select label={TX(lang, "Format", "Format")} value={opts.format} onChange={(e) => setOpts({ ...opts, format: e.target.value })}
         options={[
@@ -186,9 +205,11 @@ TOOL_DEFS.pagenum = {
       </Field>
     </div>
   ),
-  overlay: (opts) => (p, i) => {
+  overlay: (opts) => (p, i, total) => {
+    if (!pageScopeIncludes(opts, i, total)) return null;
     const colors = { ink: "#2B2740", gray: "#8C88A0", violet: "#5518B4" };
-    const label = opts.format === "n_of_total" ? `${i + 1} / …` : opts.format === "page_n" ? `Halaman ${i + 1}` : String(i + 1);
+    const number = appliedNumber(opts, i, total);
+    const label = opts.format === "n_of_total" ? `${number} / ${total}` : opts.format === "page_n" ? `Halaman ${number}` : String(number);
     const fam = { helvetica: "Helvetica, Arial, sans-serif", times: "'Times New Roman', serif", courier: "'Courier New', monospace" }[opts.font];
     return (
       <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -203,6 +224,8 @@ TOOL_DEFS.pagenum = {
       </div>
     );
   },
+  disabled: (ctx, opts, lang) => !!getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang),
+  disabledReason: (ctx, opts, t, lang) => getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || t.toolRequirements.pagenum,
   nextAction: (ctx, opts, t, lang) => TX(lang, "Nomor halaman akan diterapkan secara lokal ke semua halaman.", "Page numbers will be applied locally to every page."),
   successSummary: (result, ctx, opts, t, lang) => {
     const files = result.outputs.length;
@@ -213,18 +236,63 @@ TOOL_DEFS.pagenum = {
 
 TOOL_DEFS.flatten = {
   view: "preview", multiFile: true,
+  previewKind: "flatten",
   defaults: { forms: true, annotations: true },
   Panel: ({ t, lang, opts, setOpts }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Switch label={TX(lang, "Ratakan isian formulir", "Flatten form fields")} checked={opts.forms} onChange={(forms) => setOpts({ ...opts, forms })} />
-      <Switch label={TX(lang, "Ratakan anotasi", "Flatten annotations")} checked={opts.annotations} onChange={(annotations) => setOpts({ ...opts, annotations })} />
-      <Alert tone="info" title={TX(lang, "Apa yang terjadi?", "What happens?")}>
-        {TX(lang,
-          "Isian formulir dan anotasi menjadi bagian permanen halaman — tidak dapat diubah lagi setelah diratakan.",
-          "Form fields and annotations become a permanent part of the page — they can no longer be edited after flattening.")}
-      </Alert>
+      <OptionSummary
+        label={TX(lang, "Ratakan isian formulir", "Flatten form fields")}
+        summary={TX(lang, "Isian menjadi permanen dan tidak dapat diedit lagi.", "Form values become permanent and can no longer be edited.")}
+        checked={opts.forms}
+        onChange={(forms) => setOpts({ ...opts, forms })}
+      />
+      <OptionSummary
+        label={TX(lang, "Ratakan anotasi", "Flatten annotations")}
+        summary={TX(lang, "Anotasi dipertahankan jika jenisnya belum dapat diratakan aman oleh browser.", "Annotations are preserved when their type cannot be safely flattened in the browser.")}
+        checked={opts.annotations}
+        onChange={(annotations) => setOpts({ ...opts, annotations })}
+      />
+      {(opts.forms || opts.annotations) && (
+        <Alert tone="warning" title={TX(lang, "Ringkasan sebelum proses", "Before processing")}>
+          {[opts.forms && TX(lang, "Isian formulir akan dikunci sebagai konten halaman.", "Form fields will be locked into page content."), opts.annotations && TX(lang, "Anotasi akan diproses sebagai konten permanen bila didukung PDF.", "Annotations will be processed as permanent content when supported by the PDF.")].filter(Boolean).join(" ")}
+        </Alert>
+      )}
     </div>
   ),
   disabled: (ctx, opts) => !opts.forms && !opts.annotations,
   process: (ctx, opts, onP) => PdfProcess.flatten(ctx.files, opts, onP),
 };
+
+function ScopeControl({ lang, opts, setOpts, pageCount, allowExcludeFirst = false }) {
+  const error = getScopeError(opts, pageCount, lang);
+  return (
+    <Field label={TX(lang, "Terapkan ke", "Apply to")}>
+      <Segmented value={opts.scope || "all"} onChange={(scope) => setOpts({ ...opts, scope })} options={[
+        { value: "all", label: TX(lang, "Semua halaman", "All pages") },
+        { value: "range", label: TX(lang, "Rentang khusus", "Custom range") },
+      ]} />
+      {opts.scope === "range" && (
+        <Input
+          mono
+          label={TX(lang, "Rentang halaman", "Page range")}
+          value={opts.range || ""}
+          placeholder="1-3, 5, 8-10"
+          error={error}
+          onChange={(e) => setOpts({ ...opts, range: e.target.value })}
+        />
+      )}
+      {allowExcludeFirst && (
+        <Switch label={TX(lang, "Kecualikan halaman pertama", "Exclude first page")} checked={!!opts.excludeFirst} onChange={(excludeFirst) => setOpts({ ...opts, excludeFirst })} />
+      )}
+    </Field>
+  );
+}
+
+function OptionSummary({ label, summary, checked, onChange }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <Switch label={label} checked={checked} onChange={onChange} />
+      {checked && <span style={{ font: "var(--type-caption)", color: "var(--text-muted)", paddingLeft: 2 }}>{summary}</span>}
+    </div>
+  );
+}

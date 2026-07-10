@@ -1,4 +1,3 @@
-import React from "react";
 import { IconButton, LangSwitcher } from "../components/index.js";
 import { DEFAULT_TOOL_ID, getToolHref } from "./toolRoutes.js";
 
@@ -14,9 +13,20 @@ export function PdfinLogo({ dark = false }) {
 }
 
 export function Header({ lang, setLang, theme, setTheme, current = "home", onHome, onWorkspace }) {
+  const themeToggleLabel = lang === "id"
+    ? (theme === "dark" ? "Beralih ke mode terang" : "Beralih ke mode gelap")
+    : (theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
   const nav = lang === "id"
-    ? [{ key: "home", label: "Semua alat", href: import.meta.env.BASE_URL, action: onHome }, { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace }]
-    : [{ key: "home", label: "All tools", href: import.meta.env.BASE_URL, action: onHome }, { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace }];
+    ? [
+        { key: "home", label: "Semua alat", href: import.meta.env.BASE_URL, action: onHome },
+        { key: "workspace", label: "Ruang kerja", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
+        { key: "privacy", label: "Privasi & keamanan", href: `${import.meta.env.BASE_URL}#privacy-security` },
+      ]
+    : [
+        { key: "home", label: "All tools", href: import.meta.env.BASE_URL, action: onHome },
+        { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
+        { key: "privacy", label: "Privacy & security", href: `${import.meta.env.BASE_URL}#privacy-security` },
+      ];
   return (
     <header style={{
       minHeight: "var(--header-height)", background: "var(--surface-card)",
@@ -33,7 +43,11 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
               key={n.label}
               href={n.href}
               aria-current={active ? "page" : undefined}
-              onClick={(e) => { e.preventDefault(); n.action && n.action(); }}
+              onClick={(e) => {
+                if (!n.action) return;
+                e.preventDefault();
+                n.action();
+              }}
               style={{
                 font: "var(--type-label)",
                 color: active ? "var(--text-brand)" : "var(--text-body)",
@@ -51,7 +65,7 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
       </nav>
       <LangSwitcher lang={lang} onChange={setLang} />
       <IconButton
-        label={theme === "dark" ? "Light mode" : "Dark mode"}
+        label={themeToggleLabel}
         aria-pressed={theme === "dark" ? "true" : "false"}
         onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         icon={theme === "dark"
@@ -64,20 +78,27 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
 
 export function Footer({ lang }) {
   const t = lang === "id"
-    ? { privacy: "Kebijakan privasi", terms: "Syarat & ketentuan", desktop: "Aplikasi desktop", note: "File Anda diproses di browser. PDFin tidak mengunggah file Anda untuk alat ini." }
-    : { privacy: "Privacy policy", terms: "Terms", desktop: "Desktop app", note: "Your files are processed in your browser. PDFin does not upload your files for this tool." };
-  const mutedItem = {
-    font: "var(--type-caption)",
-    color: "var(--text-faint)",
-  };
+    ? {
+        privacy: "Privasi & keamanan",
+        github: "GitHub",
+        selfHosting: "Self-hosting / on-premise",
+        note: "PDFin memproses file langsung di browser Anda. File tidak diunggah ke server.",
+      }
+    : {
+        privacy: "Privacy & security",
+        github: "GitHub",
+        selfHosting: "Self-hosting / on-premise",
+        note: "PDFin processes files directly in your browser. Files are not uploaded to a server.",
+      };
+  const linkStyle = { font: "var(--type-caption)", color: "var(--text-link)" };
   return (
     <footer style={{ borderTop: "1px solid var(--border-default)", padding: "28px clamp(16px, 4vw, 32px)", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 18, background: "var(--surface-card)" }}>
       <PdfinLogo />
       <span style={{ font: "var(--type-caption)", color: "var(--text-muted)", flex: 1 }}>{t.note}</span>
-      <span aria-disabled="true" style={mutedItem}>{t.privacy}</span>
-      <span aria-disabled="true" style={mutedItem}>{t.terms}</span>
-      <span aria-disabled="true" style={mutedItem}>GitHub</span>
-      <span aria-disabled="true" style={mutedItem}>{t.desktop}</span>
+      <a href={`${import.meta.env.BASE_URL}#privacy-security`} style={linkStyle}>{t.privacy}</a>
+      <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" style={linkStyle}>{t.github}</a>
+      <a href="mailto:afiffaizianur@gmail.com" style={linkStyle}>{t.selfHosting}</a>
+      <a href="mailto:afiffaizianur@gmail.com" style={linkStyle}>afiffaizianur@gmail.com</a>
     </footer>
   );
 }

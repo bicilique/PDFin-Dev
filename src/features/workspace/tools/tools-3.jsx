@@ -386,7 +386,7 @@ export function SignPad({ lang, onChange }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <Input label={TX3(lang, "Nama", "Name")} value={name} onChange={(e) => typeName(e.target.value)} />
           {name.trim() && (
-            <div style={{ padding: "10px 14px", border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", background: "#fff" }}>
+            <div style={{ padding: "10px 14px", border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", background: "var(--color-pdf-page)" }}>
               <span style={{ font: "italic 30px 'Segoe Script', 'Brush Script MT', cursive", color: "#1B1730" }}>{name}</span>
             </div>
           )}
@@ -440,7 +440,7 @@ DEFS3.sign = {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Alert tone="info">{TX3(lang, "Tambahkan tampilan tanda tangan ke PDF. Ini bukan tanda tangan digital tersertifikasi.", "Add a visible signature appearance to the PDF. This is not a certified digital signature.")}</Alert>
         <SignPad lang={lang} onChange={(signatureSource) => setOpts({ ...opts, signatureSource })} />
-        {opts.signatureSource?.url && <img src={opts.signatureSource.url} alt={TX3(lang, "Pratinjau tanda tangan", "Signature preview")} style={{ width: 120, maxHeight: 70, objectFit: "contain", border: "1px solid var(--border-default)", borderRadius: 6, background: "#fff" }} />}
+        {opts.signatureSource?.url && <img src={opts.signatureSource.url} alt={TX3(lang, "Pratinjau tanda tangan", "Signature preview")} style={{ width: 120, maxHeight: 70, objectFit: "contain", border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--color-pdf-page)" }} />}
         <SR3 label={TX3(lang, "Lebar tanda tangan", "Signature width")} value={opts.widthPct || 28} min={10} max={60} unit="%" onChange={(widthPct) => setOpts({ ...opts, widthPct })} />
         <F3 label={TX3(lang, "Target halaman", "Target page")}>
           <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{TX3(lang, `Akan ditempatkan di halaman ${currentPage}`, `Will be placed on page ${currentPage}`)}</span>

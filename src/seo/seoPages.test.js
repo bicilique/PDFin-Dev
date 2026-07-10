@@ -29,10 +29,23 @@ describe("SEO page catalog", () => {
     expect(getIndexableSeoPages().map((page) => page.toolId)).toEqual(productionToolIds);
   });
 
+  it("publishes protect as available and keeps unlock as the only in-development security tool", () => {
+    const protect = seoPages.find((page) => page.toolId === "protect");
+    const unlock = seoPages.find((page) => page.toolId === "unlock");
+
+    expect(protect.indexable).toBe(true);
+    expect(protect.description).toMatch(/password/i);
+    expect(protect.description).not.toMatch(/prototipe|simulasi/i);
+    expect(unlock.indexable).toBe(false);
+    expect(unlock.description).toMatch(/dalam pengembangan|simulasi/i);
+  });
+
   it("has canonical GitHub Pages defaults", () => {
     expect(SITE_URL).toBe("https://bicilique.github.io/PDFin-Dev");
     expect(SITE_BASE_PATH).toBe("/PDFin-Dev/");
     expect(homeSeoPage.indexable).toBe(true);
+    expect(homeSeoPage.h1).toBe("Alat PDF gratis yang bekerja di perangkat Anda");
+    expect(homeSeoPage.description).toMatch(/tanpa mengunggah file ke server/i);
   });
 
   it("has complete metadata for every static page", () => {

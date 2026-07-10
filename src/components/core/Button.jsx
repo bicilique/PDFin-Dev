@@ -27,7 +27,6 @@ export function Button({
     border: "1px solid transparent",
     borderRadius: "var(--radius-md)",
     cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
     transition: "background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
     whiteSpace: "nowrap",
   };
@@ -41,7 +40,7 @@ export function Button({
   const variants = {
     primary: {
       background: active ? "var(--action-primary-active)" : hover ? "var(--action-primary-hover)" : "var(--action-primary)",
-      color: "var(--text-inverse)",
+      color: "var(--color-accent-contrast)",
     },
     secondary: {
       background: hover ? "var(--surface-brand-subtle)" : "var(--surface-card)",
@@ -54,15 +53,22 @@ export function Button({
     },
     danger: {
       background: hover ? "var(--red-700)" : "var(--red-600)",
-      color: "var(--text-inverse)",
+      color: "var(--color-accent-contrast)",
     },
   };
+  const disabledStyle = disabled
+    ? {
+        background: "var(--color-disabled-bg)",
+        color: "var(--color-disabled-fg)",
+        borderColor: "var(--color-disabled-border)",
+      }
+    : null;
   return (
     <button
       type={type}
       disabled={disabled}
       onClick={onClick}
-      style={{ ...base, ...sizes[size], ...variants[variant] }}
+      style={{ ...base, ...sizes[size], ...variants[variant], ...disabledStyle }}
       onMouseEnter={() => setState("hover")}
       onMouseLeave={() => setState("idle")}
       onMouseDown={() => setState("active")}

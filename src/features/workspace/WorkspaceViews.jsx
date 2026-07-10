@@ -69,7 +69,7 @@ export function LazyThumb({ fileId, pageNo, width, style }) {
     );
   }
   return (
-    <div ref={holder} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#fff", ...style }}>
+    <div ref={holder} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "var(--color-pdf-page)", ...style }}>
       <span className="ws-shimmer" style={{ width: "70%", height: "80%", borderRadius: 4 }}></span>
     </div>
   );
@@ -242,8 +242,8 @@ function fileStatusLabel(file, t, lang) {
 function ArrowBtn({ dir, disabled, onClick, label }) {
   return (
     <button type="button" aria-label={label || dir} disabled={disabled} onClick={onClick} style={{
-      display: "flex", border: "none", background: "transparent", color: "var(--text-faint)",
-      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.3 : 1, padding: "1px 2px",
+      display: "flex", border: "none", background: "transparent", color: disabled ? "var(--color-disabled-fg)" : "var(--text-faint)",
+      cursor: disabled ? "default" : "pointer", padding: "1px 2px",
     }}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
         {dir === "up" ? <path d="m18 15-6-6-6 6"></path> : <path d="m6 9 6 6 6-6"></path>}
@@ -452,7 +452,7 @@ function SortablePageItem({ page, index, t, width, selected, highlighted, badge,
           borderRadius: "var(--radius-sm)",
           border: `1px solid ${selected ? "var(--border-brand)" : "var(--border-default)"}`,
           background: selected ? "var(--action-primary)" : "var(--surface-card)",
-          color: selected ? "var(--text-inverse)" : "var(--text-muted)",
+          color: selected ? "var(--color-accent-contrast)" : "var(--text-muted)",
           boxShadow: "var(--shadow-card)",
           cursor: "pointer",
         }}>
@@ -529,9 +529,8 @@ function pageMoveButtonStyle(disabled) {
     border: "1px solid var(--border-default)",
     borderRadius: "var(--radius-sm)",
     background: "var(--surface-card)",
-    color: "var(--text-muted)",
+    color: disabled ? "var(--color-disabled-fg)" : "var(--text-muted)",
     cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.35 : 1,
   };
 }
 

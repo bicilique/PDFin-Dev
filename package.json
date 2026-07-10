@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify:theme": "npx --yes -p playwright node scripts/verify-theme.mjs",
     "preview": "vite preview",
     "postinstall": "node scripts/copy-pdfjs-assets.mjs && node scripts/copy-ocr-assets.mjs"
   },

@@ -50,7 +50,7 @@ export function DownloadCard({ name, meta, downloadLabel = "Download", onDownloa
           border: "1px solid transparent",
           borderRadius: "var(--radius-md)",
           background: hover ? "var(--action-primary-hover)" : "var(--action-primary)",
-          color: "var(--text-inverse)",
+          color: "var(--color-accent-contrast)",
           font: "var(--weight-semibold) var(--text-sm)/1 var(--font-sans)",
           cursor: "pointer",
           flex: "none",

@@ -1,6 +1,8 @@
 /* PDFin color system — derived from the PDFin "P" mark (violet gradient + cyan) */
 
 :root {
+  color-scheme: light;
+
   /* ---- Base scales ---- */
   /* Violet (primary — the top of the P) */
   --violet-050: #F3EFFC;
@@ -52,33 +54,41 @@
   --red-700: #A22629;
 
   /* ---- Semantic aliases (light theme) ---- */
-  --surface-page: var(--ink-050);
-  --surface-card: var(--ink-000);
-  --surface-raised: var(--ink-000);
-  --surface-sunken: var(--ink-100);
-  --surface-inverse: var(--ink-900);
-  --surface-brand-subtle: var(--violet-050);
-  --surface-accent-subtle: var(--cyan-050);
+  --color-canvas: var(--ink-050);
+  --color-surface: var(--ink-000);
+  --color-surface-raised: var(--ink-000);
+  --color-surface-sunken: var(--ink-100);
+  --color-surface-interactive: var(--violet-050);
+  --color-surface-accent: var(--cyan-050);
 
-  --text-heading: var(--ink-900);
-  --text-body: var(--ink-700);
-  --text-muted: var(--ink-500);
-  --text-faint: var(--ink-400);
-  --text-inverse: #FFFFFF;
-  --text-brand: var(--violet-600);
-  --text-link: var(--violet-600);
-  --text-link-hover: var(--violet-700);
+  --color-text-primary: var(--ink-900);
+  --color-text-secondary: var(--ink-700);
+  --color-text-muted: var(--ink-500);
+  --color-text-faint: var(--ink-400);
+  --color-text-link: var(--violet-600);
+  --color-text-link-hover: var(--violet-700);
 
-  --border-default: var(--ink-200);
-  --border-strong: var(--ink-300);
-  --border-brand: var(--violet-300);
-  --border-focus: var(--violet-500);
+  --color-border: var(--ink-200);
+  --color-border-strong: var(--ink-300);
+  --color-border-brand: var(--violet-300);
+  --color-focus-ring: var(--violet-500);
 
-  --action-primary: var(--violet-600);
-  --action-primary-hover: var(--violet-700);
-  --action-primary-active: var(--violet-800);
-  --action-accent: var(--cyan-500);
-  --action-accent-hover: var(--cyan-600);
+  --color-accent: var(--violet-600);
+  --color-accent-hover: var(--violet-700);
+  --color-accent-active: var(--violet-800);
+  --color-accent-contrast: #FFFFFF;
+  --color-info: var(--cyan-700);
+  --color-success: var(--green-700);
+  --color-danger: var(--red-700);
+
+  --color-disabled-bg: var(--ink-100);
+  --color-disabled-fg: var(--ink-500);
+  --color-disabled-border: var(--ink-200);
+  --color-overlay-scrim: rgba(18, 15, 34, 0.45);
+  --color-tooltip-bg: var(--ink-900);
+  --color-tooltip-fg: #FFFFFF;
+  --color-switch-thumb: #FFFFFF;
+  --color-pdf-page: #FFFFFF;
 
   --status-success-bg: var(--green-100);
   --status-success-fg: var(--green-700);
@@ -89,9 +99,39 @@
   --status-info-bg: var(--cyan-050);
   --status-info-fg: var(--cyan-700);
 
+  --surface-page: var(--color-canvas);
+  --surface-card: var(--color-surface);
+  --surface-raised: var(--color-surface-raised);
+  --surface-sunken: var(--color-surface-sunken);
+  --surface-inverse: var(--color-tooltip-bg);
+  --surface-brand-subtle: var(--color-surface-interactive);
+  --surface-accent-subtle: var(--color-surface-accent);
+
+  --text-heading: var(--color-text-primary);
+  --text-body: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --text-faint: var(--color-text-faint);
+  --text-inverse: var(--color-accent-contrast);
+  --text-brand: var(--color-accent);
+  --text-link: var(--color-text-link);
+  --text-link-hover: var(--color-text-link-hover);
+
+  --border-default: var(--color-border);
+  --border-strong: var(--color-border-strong);
+  --border-brand: var(--color-border-brand);
+  --border-focus: var(--color-focus-ring);
+
+  --action-primary: var(--color-accent);
+  --action-primary-hover: var(--color-accent-hover);
+  --action-primary-active: var(--color-accent-active);
+  --action-accent: var(--cyan-500);
+  --action-accent-hover: var(--cyan-600);
+
   /* Brand gradient — mirrors the logo mark */
   --gradient-brand: linear-gradient(135deg, #370C7C 0%, #5518B4 55%, #23CDD8 130%); /* @kind color */
   --gradient-brand-soft: linear-gradient(135deg, var(--violet-050) 0%, var(--cyan-050) 100%);
+  --gradient-hero: linear-gradient(135deg, var(--violet-050) 0%, var(--cyan-050) 100%);
+  --gradient-upload: linear-gradient(135deg, var(--violet-050) 0%, var(--cyan-050) 100%);
 
   /* Privacy accent — the trust color used on privacy pills/notices */
   --privacy-bg: var(--cyan-050);
@@ -101,31 +141,69 @@
 
 /* ---- Dark theme ---- */
 [data-theme="dark"] {
-  --surface-page: var(--ink-950);
-  --surface-card: var(--ink-900);
-  --surface-raised: var(--ink-800);
-  --surface-sunken: #0D0A1A;
-  --surface-inverse: var(--ink-050);
-  --surface-brand-subtle: #241344;
-  --surface-accent-subtle: #0C2A33;
+  color-scheme: dark;
 
-  --text-heading: var(--ink-050);
-  --text-body: var(--ink-200);
-  --text-muted: var(--ink-400);
-  --text-faint: var(--ink-500);
-  --text-inverse: var(--ink-900);
-  --text-brand: var(--violet-300);
-  --text-link: var(--violet-300);
-  --text-link-hover: var(--violet-200);
+  --color-canvas: var(--ink-950);
+  --color-surface: var(--ink-900);
+  --color-surface-raised: var(--ink-800);
+  --color-surface-sunken: #0D0A1A;
+  --color-surface-interactive: #241344;
+  --color-surface-accent: #0C2A33;
 
-  --border-default: #35304C;
-  --border-strong: #454060;
-  --border-brand: var(--violet-500);
-  --border-focus: var(--violet-400);
+  --color-text-primary: var(--ink-050);
+  --color-text-secondary: var(--ink-200);
+  --color-text-muted: #B7B1C9;
+  --color-text-faint: #9189AA;
+  --color-text-link: var(--violet-200);
+  --color-text-link-hover: var(--cyan-200);
 
-  --action-primary: var(--violet-500);
-  --action-primary-hover: var(--violet-400);
-  --action-primary-active: var(--violet-300);
+  --color-border: #35304C;
+  --color-border-strong: #5A5372;
+  --color-border-brand: var(--violet-400);
+  --color-focus-ring: var(--cyan-300);
+
+  --color-accent: var(--violet-400);
+  --color-accent-hover: var(--violet-300);
+  --color-accent-active: var(--violet-200);
+  --color-accent-contrast: #120F22;
+  --color-info: #64D5E0;
+  --color-success: #6FD9A0;
+  --color-danger: #F09A9C;
+
+  --color-disabled-bg: #211C35;
+  --color-disabled-fg: #9189AA;
+  --color-disabled-border: #35304C;
+  --color-overlay-scrim: rgba(6, 4, 14, 0.66);
+  --color-tooltip-bg: #F8F7FB;
+  --color-tooltip-fg: #1B1730;
+  --color-switch-thumb: #F8F7FB;
+  --color-pdf-page: #FFFFFF;
+
+  --surface-page: var(--color-canvas);
+  --surface-card: var(--color-surface);
+  --surface-raised: var(--color-surface-raised);
+  --surface-sunken: var(--color-surface-sunken);
+  --surface-inverse: var(--color-tooltip-bg);
+  --surface-brand-subtle: var(--color-surface-interactive);
+  --surface-accent-subtle: var(--color-surface-accent);
+
+  --text-heading: var(--color-text-primary);
+  --text-body: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --text-faint: var(--color-text-faint);
+  --text-inverse: var(--color-accent-contrast);
+  --text-brand: var(--violet-200);
+  --text-link: var(--color-text-link);
+  --text-link-hover: var(--color-text-link-hover);
+
+  --border-default: var(--color-border);
+  --border-strong: var(--color-border-strong);
+  --border-brand: var(--color-border-brand);
+  --border-focus: var(--color-focus-ring);
+
+  --action-primary: var(--color-accent);
+  --action-primary-hover: var(--color-accent-hover);
+  --action-primary-active: var(--color-accent-active);
 
   --status-success-bg: #10331F;
   --status-success-fg: #6FD9A0;
@@ -139,4 +217,8 @@
   --privacy-bg: #0C2A33;
   --privacy-fg: #64D5E0;
   --privacy-border: #14495A;
+
+  --gradient-brand-soft: linear-gradient(135deg, #18112C 0%, #241344 52%, #0C2A33 120%);
+  --gradient-hero: linear-gradient(135deg, #120F22 0%, #22143F 55%, #082D38 125%);
+  --gradient-upload: linear-gradient(135deg, #18112C 0%, #241344 54%, #0C2A33 120%);
 }

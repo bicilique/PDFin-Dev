@@ -20,11 +20,10 @@ export function IconButton({ label, icon, variant = "ghost", size = "md", disabl
         alignItems: "center",
         justifyContent: "center",
         borderRadius: "var(--radius-md)",
-        border: variant === "outline" ? "1px solid var(--border-default)" : "1px solid transparent",
-        background: hover && !disabled ? "var(--surface-sunken)" : variant === "outline" ? "var(--surface-card)" : "transparent",
-        color: "var(--text-body)",
+        border: disabled ? "1px solid var(--color-disabled-border)" : variant === "outline" ? "1px solid var(--border-default)" : "1px solid transparent",
+        background: disabled ? "var(--color-disabled-bg)" : hover ? "var(--surface-sunken)" : variant === "outline" ? "var(--surface-card)" : "transparent",
+        color: disabled ? "var(--color-disabled-fg)" : "var(--text-body)",
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
         transition: "background var(--duration-fast) var(--ease-out)",
       }}
       {...rest}

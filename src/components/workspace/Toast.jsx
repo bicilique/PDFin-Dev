@@ -27,10 +27,10 @@ export function Toast({ tone = "neutral", children, action = null, onDismiss }) 
         alignItems: "center",
         gap: 10,
         padding: "10px 14px",
-        background: "var(--surface-inverse)",
-        color: "var(--text-inverse)",
+        background: "var(--color-tooltip-bg)",
+        color: "var(--color-tooltip-fg)",
         borderRadius: "var(--radius-md)",
-        boxShadow: "0 12px 32px rgba(18, 15, 34, 0.3)",
+        boxShadow: "var(--shadow-overlay)",
         font: "var(--type-body-sm)",
         maxWidth: 480,
       }}
@@ -43,7 +43,7 @@ export function Toast({ tone = "neutral", children, action = null, onDismiss }) 
           type="button"
           aria-label="Dismiss"
           onClick={onDismiss}
-          style={{ display: "flex", border: "none", background: "transparent", color: "inherit", opacity: 0.7, cursor: "pointer", padding: 2 }}
+          style={{ display: "flex", border: "none", background: "transparent", color: "inherit", cursor: "pointer", padding: 2 }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
         </button>

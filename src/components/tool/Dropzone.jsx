@@ -13,7 +13,7 @@ export function Dropzone({ lang = "id", multiple = false, accept = "PDF", onSele
       onDrop={(e) => { e.preventDefault(); setOver(false); onSelect && onSelect(e); }}
       style={{
         border: "2px dashed " + (over ? "var(--border-focus)" : "var(--border-strong)"),
-        background: over ? "var(--surface-brand-subtle)" : "var(--surface-card)",
+        background: over ? "var(--surface-brand-subtle)" : "var(--gradient-upload)",
         borderRadius: "var(--radius-xl)",
         padding: compact ? "24px 20px" : "48px 32px",
         display: "flex",
@@ -36,7 +36,7 @@ export function Dropzone({ lang = "id", multiple = false, accept = "PDF", onSele
       <div style={{ font: "var(--type-h4)", color: "var(--text-heading)" }}>{t.drop}</div>
       <div style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{t.or}</div>
       <button type="button" onClick={() => onSelect && onSelect()} style={{
-        background: "var(--action-primary)", color: "#fff", border: 0,
+        background: "var(--action-primary)", color: "var(--color-accent-contrast)", border: 0,
         borderRadius: "var(--radius-md)", padding: "9px 20px",
         font: "var(--type-label)", fontSize: "var(--text-base)", cursor: "pointer",
       }}>{t.choose}</button>

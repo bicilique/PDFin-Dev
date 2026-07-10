@@ -13,7 +13,7 @@ export function Modal({ title, children, footer = null, onClose, width = 440 }) 
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(18, 15, 34, 0.45)",
+        background: "var(--color-overlay-scrim)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -33,7 +33,7 @@ export function Modal({ title, children, footer = null, onClose, width = 440 }) 
           background: "var(--surface-card)",
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-lg)",
-          boxShadow: "0 24px 64px rgba(18, 15, 34, 0.28)",
+          boxShadow: "var(--shadow-overlay)",
           display: "flex",
           flexDirection: "column",
         }}

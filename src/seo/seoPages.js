@@ -118,19 +118,19 @@ const toolSeoCopy = {
   protect: {
     title: "Kunci PDF online | PDFin",
     h1: "Kunci PDF",
-    description: "Halaman prototipe untuk proteksi PDF di PDFin. Fitur ini masih berupa simulasi.",
-    intro: "Proteksi PDF masih dalam status prototipe dan belum menghasilkan enkripsi final.",
-    howItWorks: ["Tambahkan PDF untuk melihat alur.", "Coba pengaturan prototipe.", "Gunakan hasil hanya untuk evaluasi UI."],
+    description: "Tambahkan password untuk membuka PDF langsung di browser dengan pemrosesan lokal.",
+    intro: "Kunci PDF membantu menambahkan password pembuka dokumen tanpa mengunggah file ke server PDFin.",
+    howItWorks: ["Tambahkan satu file PDF.", "Masukkan dan konfirmasi password.", "Unduh PDF terkunci hasil pemrosesan lokal."],
     faq: [
-      ["Apakah hasilnya benar-benar terenkripsi?", "Belum. Fitur ini masih prototipe dan diberi noindex."],
-      ["Kapan bisa digunakan penuh?", "Fitur akan diindeks setelah proteksi PDF benar-benar tersedia."],
+      ["Apakah PDF diproses di server?", "Tidak. Proteksi PDF dijalankan di browser menggunakan qpdf WASM."],
+      ["Apakah password bisa dipulihkan?", "Tidak. Simpan password dengan aman karena PDFin tidak dapat memulihkannya."],
     ],
   },
   unlock: {
     title: "Buka kunci PDF online | PDFin",
     h1: "Buka kunci PDF",
-    description: "Halaman prototipe untuk membuka PDF terkunci di PDFin. Fitur ini masih berupa simulasi.",
-    intro: "Alur buka kunci PDF tersedia sebagai prototipe untuk evaluasi pengalaman pengguna.",
+    description: "Buka PDF terkunci masih dalam pengembangan di PDFin dan belum tersedia untuk kebutuhan produksi.",
+    intro: "Alur buka PDF terkunci masih disiapkan agar tidak menjanjikan fungsi yang belum final.",
     howItWorks: ["Tambahkan PDF untuk mencoba alur.", "Lihat pengaturan prototipe.", "Jangan gunakan untuk kebutuhan produksi."],
     faq: [
       ["Apakah PDF terkunci benar-benar dibuka?", "Belum. Fitur ini masih prototipe."],
@@ -182,9 +182,9 @@ export const seoPages = WORKSPACE_TOOL_IDS.map((toolId) => ({
 export const homeSeoPage = {
   slug: "",
   title: "PDFin | Alat PDF privat di browser",
-  h1: "Alat PDF mudah, cepat, dan privat",
-  description: "PDFin adalah kumpulan alat PDF berbasis browser. File diproses di perangkat Anda tanpa unggah untuk alat inti.",
-  intro: "Gabung, pisah, kompres, atur halaman, dan olah PDF langsung dari browser dengan pengalaman yang ringan dan fokus privasi.",
+  h1: "Alat PDF gratis yang bekerja di perangkat Anda",
+  description: "PDFin adalah kumpulan alat PDF gratis yang memproses file di browser tanpa mengunggah file ke server.",
+  intro: "Gabung, pisah, kompres, atur halaman, dan kelola PDF langsung dari perangkat Anda tanpa membuat akun.",
   indexable: true,
 };
 

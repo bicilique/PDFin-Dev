@@ -67,9 +67,8 @@ function NavBtn({ label, icon, onClick, disabled }) {
         height: 28,
         border: "none",
         borderRadius: "var(--radius-sm)",
-        background: hover && !disabled ? "var(--surface-sunken)" : "transparent",
-        color: "var(--text-body)",
-        opacity: disabled ? 0.4 : 1,
+        background: disabled ? "var(--color-disabled-bg)" : hover ? "var(--surface-sunken)" : "transparent",
+        color: disabled ? "var(--color-disabled-fg)" : "var(--text-body)",
         cursor: disabled ? "not-allowed" : "pointer",
         transition: "background var(--duration-fast) var(--ease-out)",
       }}

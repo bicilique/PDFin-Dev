@@ -1,5 +1,6 @@
 import React from "react";
 import { Badge, Button, IconButton, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
+import { applyTheme, getInitialTheme, persistTheme } from "../../app/theme.js";
 import { PDFIN_T } from "./i18n.js";
 import { PdfEngine } from "./engine/pdfEngine.js";
 import { PdfProcess } from "./engine/pdfProcess.js";
@@ -97,7 +98,7 @@ function SplitSelectionToolbar({ lang, selectedCount, totalCount, onSelectAll, o
 
 export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   const [lang, setLang] = React.useState(localStorage.getItem("pdfin-ws-lang") || initialLang);
-  const [theme, setTheme] = React.useState(localStorage.getItem("pdfin-ws-theme") || initialTheme);
+  const [theme, setTheme] = React.useState(() => getInitialTheme(initialTheme));
   const [tool, setTool] = React.useState(hashTool());
   const [files, setFiles] = React.useState([]);
   const [pages, setPages] = React.useState([]);
@@ -131,9 +132,9 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light" }) {
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   React.useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    applyTheme(theme);
     document.documentElement.setAttribute("lang", lang);
-    localStorage.setItem("pdfin-ws-theme", theme);
+    persistTheme(theme);
     localStorage.setItem("pdfin-ws-lang", lang);
   }, [theme, lang]);
 
@@ -851,7 +852,7 @@ function PagePreviewModal({ t, lang, page, position, count, onClose }) {
             width: Math.round(620 * (zoom / 100)),
             maxWidth: zoom <= 120 ? "100%" : "none",
             margin: "0 auto",
-            background: "#fff",
+            background: "var(--color-pdf-page)",
             border: "1px solid var(--border-default)",
             boxShadow: "var(--shadow-card)",
           }}>

@@ -24,7 +24,7 @@ export function ContextMenu({ items = [], x = 0, y = 0, onClose }) {
         background: "var(--surface-card)",
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-md)",
-        boxShadow: "0 12px 32px rgba(18, 15, 34, 0.18)",
+        boxShadow: "var(--shadow-overlay)",
         display: "flex",
         flexDirection: "column",
       }}
@@ -58,10 +58,9 @@ function MenuItem({ item, onClose }) {
         border: "none",
         borderRadius: "var(--radius-sm)",
         background: hover && !item.disabled ? (item.danger ? "var(--status-error-bg)" : "var(--surface-sunken)") : "transparent",
-        color: item.danger ? "var(--status-error-fg)" : "var(--text-body)",
+        color: item.disabled ? "var(--color-disabled-fg)" : item.danger ? "var(--status-error-fg)" : "var(--text-body)",
         font: "var(--type-body-sm)",
         cursor: item.disabled ? "not-allowed" : "pointer",
-        opacity: item.disabled ? 0.45 : 1,
         textAlign: "left",
         width: "100%",
       }}

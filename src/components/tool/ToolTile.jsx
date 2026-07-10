@@ -4,6 +4,7 @@ import React from "react";
 export function ToolTile({ icon, title, description, href, badge, disabled = false, onClick }) {
   const [hover, setHover] = React.useState(false);
   const [active, setActive] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
   const interactive = !!href && !disabled;
   const Tag = interactive ? "a" : "div";
   const stateStyle = active && interactive;
@@ -16,8 +17,8 @@ export function ToolTile({ icon, title, description, href, badge, disabled = fal
       {...sharedProps}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onFocus={() => setHover(true)}
-      onBlur={() => setHover(false)}
+      onFocus={() => { setHover(true); setFocused(true); }}
+      onBlur={() => { setHover(false); setFocused(false); }}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -27,12 +28,12 @@ export function ToolTile({ icon, title, description, href, badge, disabled = fal
         background: "var(--surface-card)",
         border: "1px solid " + (hover && interactive ? "var(--border-brand)" : "var(--border-default)"),
         borderRadius: "var(--radius-lg)",
-        boxShadow: hover && interactive ? "var(--shadow-raised)" : "var(--shadow-card)",
+        boxShadow: focused && interactive ? "var(--shadow-focus)" : hover && interactive ? "var(--shadow-raised)" : "var(--shadow-card)",
         padding: "var(--space-5)",
         textDecoration: "none",
         cursor: interactive ? "pointer" : "default",
-        opacity: disabled ? 0.62 : 1,
-        transition: "box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out)",
+        color: disabled ? "var(--color-disabled-fg)" : undefined,
+        transition: "box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out), background var(--duration-fast) var(--ease-out)",
         transform: stateStyle ? "translateY(1px)" : "none",
       }}
       onMouseDown={() => setActive(true)}
@@ -41,15 +42,15 @@ export function ToolTile({ icon, title, description, href, badge, disabled = fal
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{
           width: 44, height: 44, borderRadius: 12,
-          background: disabled ? "var(--surface-sunken)" : "var(--surface-brand-subtle)",
-          color: disabled ? "var(--text-faint)" : "var(--text-brand)",
+          background: disabled ? "var(--color-disabled-bg)" : "var(--surface-brand-subtle)",
+          color: disabled ? "var(--color-disabled-fg)" : "var(--text-brand)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>{icon}</div>
         {badge}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ font: "var(--type-h4)", color: "var(--text-heading)", minHeight: "2.6em", display: "flex", alignItems: "flex-start" }}>{title}</span>
-        <span style={{ font: "var(--type-body-sm)", color: "var(--text-muted)" }}>{description}</span>
+        <span style={{ font: "var(--type-body-sm)", color: disabled ? "var(--color-disabled-fg)" : "var(--text-body)" }}>{description}</span>
       </div>
     </Tag>
   );

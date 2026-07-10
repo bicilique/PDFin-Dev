@@ -85,7 +85,7 @@ export function PageCard({
               justifyContent: "center",
               background: selected ? "var(--action-primary)" : "var(--surface-card)",
               border: selected ? "none" : "1px solid var(--border-strong)",
-              color: "#fff",
+              color: "var(--color-accent-contrast)",
             }}
           >
             {selected && (

@@ -49,7 +49,7 @@ Deployment is configured in `.github/workflows/deploy-pages.yml`. In the GitHub 
 
 ## Current tool status
 
-Most workspace tools run client-side PDF processing. Protect PDF, Unlock PDF, and OCR remain visible as prototype simulations and are labeled as such in the UI. The app should not add uploads, telemetry, analytics, or remote PDF processing without an explicit product and privacy review.
+Workspace tools run client-side PDF processing in the browser. Unlock PDF remains in development and must be labeled as unavailable until it performs real password-based unlocking. The app should not add uploads, telemetry, analytics, or remote PDF processing without an explicit product and privacy review.
 
 ## Release review
 

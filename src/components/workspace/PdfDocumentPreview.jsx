@@ -411,7 +411,7 @@ function PreviewPage({ page, pageNumber, totalPages, width, compact, overlay, re
         style={{
           position: "relative",
           aspectRatio: ratio,
-          background: "#fff",
+          background: "var(--color-pdf-page)",
           border: "1px solid var(--border-default)",
           borderRadius: compact ? 4 : 5,
           boxShadow: "var(--shadow-card)",
@@ -461,9 +461,8 @@ function NavButton({ label, disabled, onClick, dir }) {
         justifyContent: "center",
         border: "none",
         borderRadius: "var(--radius-sm)",
-        background: "transparent",
-        color: "var(--text-body)",
-        opacity: disabled ? 0.38 : 1,
+        background: disabled ? "var(--color-disabled-bg)" : "transparent",
+        color: disabled ? "var(--color-disabled-fg)" : "var(--text-body)",
         cursor: disabled ? "not-allowed" : "pointer",
       }}
     >

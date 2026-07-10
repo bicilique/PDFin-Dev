@@ -3,6 +3,7 @@ import { Header, Footer } from "./Chrome.jsx";
 import { HomeScreen } from "../features/home/HomeScreen.jsx";
 import { WorkspaceApp } from "../features/workspace/WorkspaceApp.jsx";
 import { DEFAULT_TOOL_ID, getToolFromHash, getToolHref, isWorkspaceRoute } from "./toolRoutes.js";
+import { applyTheme, getInitialTheme, persistTheme } from "./theme.js";
 
 function getInitialScreen() {
   return isWorkspaceRoute() ? "workspace" : "home";
@@ -10,11 +11,12 @@ function getInitialScreen() {
 
 export function App() {
   const [lang, setLang] = React.useState("id");
-  const [theme, setTheme] = React.useState("light");
+  const [theme, setTheme] = React.useState(getInitialTheme);
   const [screen, setScreen] = React.useState(getInitialScreen);
 
   React.useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    applyTheme(theme);
+    persistTheme(theme);
     document.documentElement.setAttribute("lang", lang);
   }, [theme, lang]);
 

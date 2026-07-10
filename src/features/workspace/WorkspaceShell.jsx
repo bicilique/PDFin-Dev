@@ -37,6 +37,9 @@ export const toolIcon = (id, s) => (WSIcons[id] || WSIcons.merge)(s);
 
 // ---------- Top navigation ----------
 export function WorkspaceTopNav({ t, tool, lang, setLang, theme, setTheme, onOpenSwitcher, compact = false }) {
+  const themeToggleLabel = lang === "id"
+    ? (theme === "dark" ? "Beralih ke mode terang" : "Beralih ke mode gelap")
+    : (theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
   return (
     <header className="ws-top-nav" style={{
       height: 56, background: "var(--surface-card)", borderBottom: "1px solid var(--border-default)",
@@ -67,7 +70,7 @@ export function WorkspaceTopNav({ t, tool, lang, setLang, theme, setTheme, onOpe
         {!compact && <kbd style={{ font: "10.5px var(--font-mono)", color: "var(--text-faint)", border: "1px solid var(--border-default)", borderRadius: 5, padding: "3px 6px" }}>Ctrl K</kbd>}
       </nav>
       <LangSwitcher lang={lang} onChange={setLang} />
-      <IconButton label={theme === "dark" ? "Light mode" : "Dark mode"} aria-pressed={theme === "dark" ? "true" : "false"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      <IconButton label={themeToggleLabel} aria-pressed={theme === "dark" ? "true" : "false"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         icon={theme === "dark"
           ? <L><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></L>
           : <L><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path></L>} />
@@ -92,13 +95,13 @@ export function QuickSwitcher({ t, toolIds, current, onPick, onClose }) {
   };
   return (
     <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
-      position: "fixed", inset: 0, background: "rgba(18,15,34,0.45)", zIndex: 100,
+      position: "fixed", inset: 0, background: "var(--color-overlay-scrim)", zIndex: 100,
       display: "flex", justifyContent: "center", alignItems: "flex-start", paddingTop: "12vh",
     }}>
       <div role="dialog" aria-label={t.allTools} style={{
         width: 520, maxHeight: "62vh", display: "flex", flexDirection: "column",
         background: "var(--surface-card)", border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-lg)", boxShadow: "0 24px 64px rgba(18,15,34,0.3)", overflow: "hidden",
+        borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-overlay)", overflow: "hidden",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--border-default)", color: "var(--text-muted)" }}>
           {WSIcons.search(17)}
@@ -165,7 +168,7 @@ export function EmptyState({ t, tool, onFiles, onSample, acceptImages, busy }) {
             width: "100%", padding: "38px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
             border: `2px dashed ${drag ? "var(--border-brand)" : "var(--border-strong)"}`,
             borderRadius: "var(--radius-lg)",
-            background: drag ? "var(--surface-brand-subtle)" : "var(--gradient-brand-soft)",
+            background: drag ? "var(--surface-brand-subtle)" : "var(--gradient-upload)",
             transition: "background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out)",
           }}>
           <span style={{ color: "var(--text-brand)" }}><L size={26}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M17 8l-5-5-5 5"></path><path d="M12 3v12"></path></L></span>

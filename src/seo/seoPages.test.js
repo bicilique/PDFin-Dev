@@ -29,6 +29,17 @@ describe("SEO page catalog", () => {
     expect(getIndexableSeoPages().map((page) => page.toolId)).toEqual(productionToolIds);
   });
 
+  it("uses non-misleading SEO copy for the visual initials tool", () => {
+    const initials = seoPages.find((page) => page.toolId === "sign");
+
+    expect(initials.slug).toBe("paraf");
+    expect(initials.title).toMatch(/paraf/i);
+    expect(initials.description).not.toMatch(/tanda tangan/i);
+    expect(initials.faq.flat().join(" ")).toMatch(/tanda tangan elektronik/i);
+    expect(initials.faq.flat().join(" ")).toMatch(/Bukan/i);
+    expect(initials.faq.flat().join(" ")).toMatch(/paraf visual/i);
+  });
+
   it("publishes protect as available and keeps unlock as the only in-development security tool", () => {
     const protect = seoPages.find((page) => page.toolId === "protect");
     const unlock = seoPages.find((page) => page.toolId === "unlock");

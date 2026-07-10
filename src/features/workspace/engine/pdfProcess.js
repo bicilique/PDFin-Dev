@@ -457,7 +457,7 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
       if (onProgress) onProgress(((i + 1) / Math.max(1, placements.length)) * 90);
     }
     const base = files[0].name.replace(/\.pdf$/i, "");
-    const res = { outputs: [out(opts.outputName || base + "-ditandatangani.pdf", await doc.save(), doc.getPageCount())] };
+    const res = { outputs: [out(opts.outputName || base + "-diparaf.pdf", await doc.save(), doc.getPageCount())] };
     if (onProgress) onProgress(100);
     return res;
   }

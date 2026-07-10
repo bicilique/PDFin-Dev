@@ -149,14 +149,14 @@ const toolSeoCopy = {
     ],
   },
   sign: {
-    title: "Tanda tangan PDF online | PDFin",
-    h1: "Tambahkan tanda tangan PDF",
-    description: "Bubuhkan tanda tangan pada halaman PDF langsung dari browser.",
-    intro: "Tempatkan tanda tangan pada dokumen tanpa mengirim file ke server PDFin.",
-    howItWorks: ["Tambahkan satu PDF.", "Buat atau pilih tanda tangan.", "Letakkan di halaman dan unduh hasilnya."],
+    title: "Paraf PDF online | PDFin",
+    h1: "Tambahkan paraf dokumen PDF",
+    description: "Bubuhkan paraf visual pada halaman PDF langsung dari browser.",
+    intro: "Tempatkan paraf visual pada dokumen tanpa mengirim file ke server PDFin.",
+    howItWorks: ["Tambahkan satu PDF.", "Buat atau pilih paraf.", "Letakkan di halaman dan unduh hasilnya."],
     faq: [
-      ["Apakah ini tanda tangan digital tersertifikasi?", "Tidak. Alat ini untuk membubuhkan tanda tangan visual pada PDF."],
-      ["Apakah bisa memilih halaman?", "Ya. Tanda tangan dapat ditempatkan di halaman yang dipilih."],
+      ["Apakah ini tanda tangan elektronik atau digital tersertifikasi?", "Bukan. Alat ini hanya untuk membubuhkan paraf visual pada PDF."],
+      ["Apakah bisa memilih halaman?", "Ya. Paraf dapat ditempatkan di halaman yang dipilih."],
     ],
   },
   ocr: {
@@ -172,8 +172,12 @@ const toolSeoCopy = {
   },
 };
 
+const seoSlugs = {
+  sign: "paraf",
+};
+
 export const seoPages = WORKSPACE_TOOL_IDS.map((toolId) => ({
-  slug: toolId,
+  slug: seoSlugs[toolId] || toolId,
   toolId,
   indexable: !PROTOTYPE_TOOL_IDS.has(toolId),
   ...toolSeoCopy[toolId],

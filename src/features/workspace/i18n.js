@@ -32,7 +32,7 @@ export const PDFIN_T = {
       merge: "Gabung PDF", split: "Pisah PDF", organize: "Atur Halaman", rotate: "Putar PDF",
       compress: "Kompres PDF", watermark: "Watermark PDF", img2pdf: "Gambar ke PDF", pdf2img: "PDF ke Gambar",
       pagenum: "Nomor Halaman", flatten: "Ratakan PDF", protect: "Kunci PDF", unlock: "Buka PDF terkunci",
-      metadata: "Metadata PDF", sign: "Tanda tangan visual PDF", ocr: "OCR PDF",
+      metadata: "Metadata PDF", sign: "Paraf dokumen PDF", ocr: "OCR PDF",
     },
     toolDesc: {
       merge: "Gabungkan beberapa PDF menjadi satu file.",
@@ -48,7 +48,7 @@ export const PDFIN_T = {
       protect: "Tambahkan password untuk membuka PDF.",
       unlock: "Buka PDF terkunci dengan password yang Anda ketahui.",
       metadata: "Lihat dan ubah judul, penulis, dan kata kunci.",
-      sign: "Tambahkan tampilan tanda tangan ke PDF.",
+      sign: "Tambahkan paraf visual ke PDF.",
       ocr: "Jadikan PDF hasil pindaian dapat dicari.",
     },
     toolRequirements: {
@@ -65,7 +65,7 @@ export const PDFIN_T = {
       protect: "Tambahkan 1 file PDF untuk dikunci.",
       unlock: "Tambahkan 1 file PDF untuk simulasi buka kunci.",
       metadata: "Tambahkan 1 file PDF untuk melihat metadata.",
-      sign: "Tambahkan 1 file PDF untuk ditandatangani.",
+      sign: "Tambahkan 1 file PDF untuk diberi paraf.",
       ocr: "Tambahkan 1 file PDF hasil pindaian untuk dibuat dapat dicari.",
     },
   },
@@ -101,7 +101,7 @@ export const PDFIN_T = {
       merge: "Merge PDF", split: "Split PDF", organize: "Organize Pages", rotate: "Rotate PDF",
       compress: "Compress PDF", watermark: "Watermark PDF", img2pdf: "Images to PDF", pdf2img: "PDF to Image",
       pagenum: "Page Numbers", flatten: "Flatten PDF", protect: "Protect PDF", unlock: "Unlock protected PDF",
-      metadata: "PDF Metadata", sign: "Visual PDF Signature", ocr: "OCR PDF",
+      metadata: "PDF Metadata", sign: "Document Initials", ocr: "OCR PDF",
     },
     toolDesc: {
       merge: "Combine multiple PDFs into one file.",
@@ -117,7 +117,7 @@ export const PDFIN_T = {
       protect: "Add a password required to open the PDF.",
       unlock: "Unlock a protected PDF with a password you know.",
       metadata: "View and edit title, author, and keywords.",
-      sign: "Add a visible signature appearance to a PDF.",
+      sign: "Add visible initials to a PDF.",
       ocr: "Make scanned PDFs searchable.",
     },
     toolRequirements: {
@@ -134,7 +134,7 @@ export const PDFIN_T = {
       protect: "Add 1 PDF file to protect.",
       unlock: "Add 1 PDF file for the unlock simulation.",
       metadata: "Add 1 PDF file to view metadata.",
-      sign: "Add 1 PDF file to sign.",
+      sign: "Add 1 PDF file to initial.",
       ocr: "Add 1 scanned PDF file to make it searchable.",
     },
   },

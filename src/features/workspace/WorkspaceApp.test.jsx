@@ -1259,7 +1259,7 @@ describe("WorkspaceApp canonical runtime", () => {
     });
   });
 
-  it("places a visual signature on page 2 and preserves page-relative coordinates", async () => {
+  it("places visual initials on page 2 and preserves page-relative coordinates", async () => {
     window.history.replaceState(null, "", "/#sign");
     render(<WorkspaceApp />);
 
@@ -1271,29 +1271,29 @@ describe("WorkspaceApp canonical runtime", () => {
     });
 
     await waitFor(() => expect(screen.getByText("contract.pdf")).toBeInTheDocument());
-    expect(screen.getByText(/bukan tanda tangan digital tersertifikasi/i)).toBeInTheDocument();
+    expect(screen.getByText(/bukan tanda tangan elektronik atau tanda tangan digital tersertifikasi/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/^nama$/i), { target: { value: "Budi" } });
-    await waitFor(() => expect(screen.getByAltText(/pratinjau tanda tangan/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByAltText(/pratinjau paraf/i)).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /halaman berikutnya/i }));
     await waitFor(() => expect(screen.getByLabelText(/ke halaman/i)).toHaveValue("2"));
     expect(screen.getByText(/akan ditempatkan di halaman 2/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tambahkan ke halaman ini/i }));
-    expect(screen.getByRole("button", { name: /halaman 2.*tanda tangan 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /halaman 2.*paraf 1/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^kiri$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^perbesar$/i }));
 
     const cta = screen
-      .getAllByRole("button", { name: /^tanda tangan visual pdf$/i })
+      .getAllByRole("button", { name: /^paraf dokumen pdf$/i })
       .find((button) => !button.disabled && !button.hasAttribute("aria-current"));
     fireEvent.click(cta);
 
     await waitFor(() => expect(PdfProcess.sign).toHaveBeenCalled());
     const [, opts] = PdfProcess.sign.mock.calls.at(-1);
-    expect(opts.outputName).toBe("contract-ditandatangani.pdf");
+    expect(opts.outputName).toBe("contract-diparaf.pdf");
     expect(opts.placements).toHaveLength(1);
     expect(opts.placements[0].pageIndex).toBe(1);
     expect(opts.placements[0].rect.x).toBeGreaterThanOrEqual(0);

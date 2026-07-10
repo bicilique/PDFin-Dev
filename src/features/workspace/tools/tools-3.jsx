@@ -294,14 +294,14 @@ function clampNumber(value, min, max) {
 }
 
 function placementLabel(lang, placement, index) {
-  return TX3(lang, `Halaman ${placement.pageIndex + 1} — Tanda tangan ${index + 1}`, `Page ${placement.pageIndex + 1} — Signature ${index + 1}`);
+  return TX3(lang, `Halaman ${placement.pageIndex + 1} — Paraf ${index + 1}`, `Page ${placement.pageIndex + 1} — Initials ${index + 1}`);
 }
 
 function signatureSummary(lang, placements) {
   const pages = new Set((placements || []).map((p) => p.pageIndex)).size;
   return TX3(lang,
-    `${placements.length} tanda tangan visual akan diterapkan pada ${pages} halaman`,
-    `${placements.length} visual signature(s) will be applied to ${pages} page(s)`);
+    `${placements.length} paraf visual akan diterapkan pada ${pages} halaman`,
+    `${placements.length} visual initial(s) will be applied to ${pages} page(s)`);
 }
 
 function clampRectToPage(rect) {
@@ -320,7 +320,7 @@ function updatePlacement(opts, id, updater) {
   };
 }
 
-// ---- Sign: visual typed or uploaded signature, placed on specific pages ----
+// ---- Initials: typed or uploaded visual initials, placed on specific pages ----
 export function SignPad({ lang, onChange }) {
   const [tab, setTab] = React.useState("type");
   const [name, setName] = React.useState("");
@@ -370,7 +370,7 @@ export function SignPad({ lang, onChange }) {
       });
       onChange({ bytes, url, type: file.type || "image/png", aspect: img.naturalWidth / img.naturalHeight, label: file.name });
     } catch {
-      setError(TX3(lang, "Gambar tanda tangan gagal dimuat.", "Signature image failed to load."));
+      setError(TX3(lang, "Gambar paraf gagal dimuat.", "Initials image failed to load."));
     } finally {
       setLoading(false);
     }
@@ -410,9 +410,9 @@ DEFS3.sign = {
   Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const currentPage = ctx.previewPage || 1;
     const selected = (opts.placements || []).find((placement) => placement.id === opts.selectedPlacementId);
-    const baseOutput = opts.outputName || outputNameValue(ctx, "ditandatangani");
+    const baseOutput = opts.outputName || outputNameValue(ctx, "diparaf");
     React.useEffect(() => {
-      if (!opts.outputName && ctx.files[0]) setOpts((next) => next.outputName ? next : { ...next, outputName: outputNameValue(ctx, "ditandatangani") });
+      if (!opts.outputName && ctx.files[0]) setOpts((next) => next.outputName ? next : { ...next, outputName: outputNameValue(ctx, "diparaf") });
     }, [ctx.files[0]?.id]);
     const addPlacement = () => {
       if (!opts.signatureSource) return;
@@ -438,15 +438,15 @@ DEFS3.sign = {
     };
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Alert tone="info">{TX3(lang, "Tambahkan tampilan tanda tangan ke PDF. Ini bukan tanda tangan digital tersertifikasi.", "Add a visible signature appearance to the PDF. This is not a certified digital signature.")}</Alert>
+        <Alert tone="info">{TX3(lang, "Tambahkan paraf visual ke PDF. Ini bukan tanda tangan elektronik atau tanda tangan digital tersertifikasi.", "Add visible initials to the PDF. This is not an electronic signature or a certified digital signature.")}</Alert>
         <SignPad lang={lang} onChange={(signatureSource) => setOpts({ ...opts, signatureSource })} />
-        {opts.signatureSource?.url && <img src={opts.signatureSource.url} alt={TX3(lang, "Pratinjau tanda tangan", "Signature preview")} style={{ width: 120, maxHeight: 70, objectFit: "contain", border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--color-pdf-page)" }} />}
-        <SR3 label={TX3(lang, "Lebar tanda tangan", "Signature width")} value={opts.widthPct || 28} min={10} max={60} unit="%" onChange={(widthPct) => setOpts({ ...opts, widthPct })} />
+        {opts.signatureSource?.url && <img src={opts.signatureSource.url} alt={TX3(lang, "Pratinjau paraf", "Initials preview")} style={{ width: 120, maxHeight: 70, objectFit: "contain", border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--color-pdf-page)" }} />}
+        <SR3 label={TX3(lang, "Lebar paraf", "Initials width")} value={opts.widthPct || 28} min={10} max={60} unit="%" onChange={(widthPct) => setOpts({ ...opts, widthPct })} />
         <F3 label={TX3(lang, "Target halaman", "Target page")}>
           <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{TX3(lang, `Akan ditempatkan di halaman ${currentPage}`, `Will be placed on page ${currentPage}`)}</span>
           <Button variant="secondary" size="sm" disabled={!opts.signatureSource} onClick={addPlacement}>{TX3(lang, "Tambahkan ke halaman ini", "Add to this page")}</Button>
         </F3>
-        <F3 label={TX3(lang, "Daftar tanda tangan", "Signature placements")}>
+        <F3 label={TX3(lang, "Daftar paraf", "Initial placements")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {(opts.placements || []).length ? opts.placements.map((placement, index) => (
               <button key={placement.id} type="button" onClick={() => { setOpts({ ...opts, selectedPlacementId: placement.id }); ctx.goToPreviewPage?.(placement.pageIndex + 1); }} style={{
@@ -455,11 +455,11 @@ DEFS3.sign = {
                 background: opts.selectedPlacementId === placement.id ? "var(--surface-brand-subtle)" : "var(--surface-card)",
                 color: "var(--text-heading)", cursor: "pointer", font: "var(--type-caption)",
               }}>{placementLabel(lang, placement, index)}</button>
-            )) : <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{TX3(lang, "Belum ada tanda tangan.", "No signatures yet.")}</span>}
+            )) : <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{TX3(lang, "Belum ada paraf.", "No initials yet.")}</span>}
           </div>
         </F3>
         {selected && (
-          <F3 label={TX3(lang, "Edit tanda tangan terpilih", "Edit selected signature")}>
+          <F3 label={TX3(lang, "Edit paraf terpilih", "Edit selected initials")}>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <Button variant="ghost" size="sm" onClick={() => moveSelected(-0.01, 0)}>{TX3(lang, "Kiri", "Left")}</Button>
               <Button variant="ghost" size="sm" onClick={() => moveSelected(0.01, 0)}>{TX3(lang, "Kanan", "Right")}</Button>
@@ -467,13 +467,13 @@ DEFS3.sign = {
               <Button variant="ghost" size="sm" onClick={() => moveSelected(0, 0.01)}>{TX3(lang, "Bawah", "Down")}</Button>
               <Button variant="ghost" size="sm" onClick={() => resizeSelected(-0.02)}>{TX3(lang, "Perkecil", "Smaller")}</Button>
               <Button variant="ghost" size="sm" onClick={() => resizeSelected(0.02)}>{TX3(lang, "Perbesar", "Larger")}</Button>
-              <Button variant="danger" size="sm" onClick={deleteSelected}>{TX3(lang, "Hapus tanda tangan", "Delete signature")}</Button>
+              <Button variant="danger" size="sm" onClick={deleteSelected}>{TX3(lang, "Hapus paraf", "Delete initials")}</Button>
             </div>
           </F3>
         )}
-        {opts.deletedPlacement && <Button variant="ghost" size="sm" onClick={restoreDeleted}>{TX3(lang, "Urungkan hapus tanda tangan", "Undo signature deletion")}</Button>}
+        {opts.deletedPlacement && <Button variant="ghost" size="sm" onClick={restoreDeleted}>{TX3(lang, "Urungkan hapus paraf", "Undo initials deletion")}</Button>}
         <F3 label={TX3(lang, "Ringkasan", "Summary")}>
-          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{(opts.placements || []).length ? signatureSummary(lang, opts.placements) : TX3(lang, "Tambahkan minimal satu tanda tangan visual.", "Add at least one visual signature.")}</span>
+          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{(opts.placements || []).length ? signatureSummary(lang, opts.placements) : TX3(lang, "Tambahkan minimal satu paraf visual.", "Add at least one visual initial.")}</span>
         </F3>
         <OutputNameField lang={lang} value={baseOutput} inputId="sign-output-name" onChange={(outputName) => setOpts({ ...opts, outputName })} />
       </div>
@@ -486,11 +486,11 @@ DEFS3.sign = {
       ))}
     </div>
   ),
-  disabled: (ctx, opts, lang = "id") => !(opts.placements || []).length || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "ditandatangani"), lang),
-  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "ditandatangani"), lang) || TX3(lang, "Tambahkan minimal satu tanda tangan visual.", "Add at least one visual signature."),
-  actionLabel: (ctx, opts, t, lang) => TX3(lang, "Tanda tangan visual PDF", "Visual PDF signature"),
+  disabled: (ctx, opts, lang = "id") => !(opts.placements || []).length || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "diparaf"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "diparaf"), lang) || TX3(lang, "Tambahkan minimal satu paraf visual.", "Add at least one visual initial."),
+  actionLabel: (ctx, opts, t, lang) => TX3(lang, "Paraf dokumen PDF", "Add document initials"),
   successSummary: (result, ctx, opts, t, lang) => signatureSummary(lang, opts.placements || []),
-  process: (ctx, opts, onP, lang) => PdfProcess.sign(ctx.files, { ...opts, outputName: getPdfOutputName(opts.outputName || outputNameValue(ctx, "ditandatangani"), lang) }, onP),
+  process: (ctx, opts, onP, lang) => PdfProcess.sign(ctx.files, { ...opts, outputName: getPdfOutputName(opts.outputName || outputNameValue(ctx, "diparaf"), lang) }, onP),
 };
 
 function SignatureOverlay({ placement, selected, onSelect, onChange }) {
@@ -528,7 +528,7 @@ function SignatureOverlay({ placement, selected, onSelect, onChange }) {
   };
   return (
     <div data-signature-page style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      <button type="button" aria-label="Tanda tangan visual" onClick={(e) => { e.stopPropagation(); onSelect(); }} onPointerDown={(e) => drag(e, "move")}
+      <button type="button" aria-label="Paraf visual" onClick={(e) => { e.stopPropagation(); onSelect(); }} onPointerDown={(e) => drag(e, "move")}
         style={{
           position: "absolute", left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.w * 100}%`,
           border: selected ? "1.5px dashed var(--border-brand)" : "1px solid transparent", background: "transparent",

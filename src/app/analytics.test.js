@@ -16,6 +16,10 @@ function createDocumentStub() {
   };
 }
 
+function normalizeDataLayer(dataLayer) {
+  return dataLayer.map((entry) => Array.from(entry));
+}
+
 describe("analytics", () => {
   it("does not load Google Analytics or send events outside production", () => {
     const doc = createDocumentStub();
@@ -52,7 +56,7 @@ describe("analytics", () => {
     expect(doc.appended).toHaveLength(1);
     expect(doc.appended[0].async).toBe(true);
     expect(doc.appended[0].src).toBe(`https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`);
-    expect(win.dataLayer).toEqual([
+    expect(normalizeDataLayer(win.dataLayer)).toEqual([
       ["js", now],
       ["config", MEASUREMENT_ID],
       ["event", "pdf_tool_opened", { tool: "merge", file_count: 2 }],

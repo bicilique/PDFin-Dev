@@ -450,7 +450,7 @@ describe("WorkspaceApp canonical runtime", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /kompres pdf/i }));
 
-    expect(window.location.hash).toBe("#compress");
+    expect(window.location.pathname).toBe("/compress/");
     await waitFor(() => {
       const activeTool = screen
         .getAllByRole("button", { name: /^kompres pdf$/i })
@@ -1354,7 +1354,8 @@ describe("WorkspaceApp canonical runtime", () => {
     fireEvent.click(screen.getByRole("button", { name: /kembali ke ruang kerja/i }));
     expect(screen.getByLabelText(/^password untuk membuka pdf$/i)).toHaveValue("");
     expect(screen.getByLabelText(/^konfirmasi password$/i)).toHaveValue("");
-    expect(localStorage.getItem("pdfin-ws-recent")).not.toContain("short");
+    expect(localStorage.getItem("pdfin-ws-recent")).toBeNull();
+    expect(localStorage.getItem("pdfin-ws-recent-tools")).not.toContain("short");
   });
 
   it("blocks existing encrypted PDFs and warns for existing digital signatures in Kunci PDF", async () => {

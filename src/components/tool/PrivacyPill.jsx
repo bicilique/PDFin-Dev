@@ -3,7 +3,7 @@ import { Icons } from "../icons/PdfinIcons.jsx";
 
 /** Privacy trust pill — the cyan local-processing marker used on every tool page. */
 export function PrivacyPill({ lang = "id", text }) {
-  const copy = text || (lang === "id" ? "File tetap di perangkat Anda" : "Your files stay on your device");
+  const copy = text || (lang === "id" ? "Diproses di browser" : "Processed in browser");
   return (
     <span style={{
       display: "inline-flex",

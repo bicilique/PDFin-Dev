@@ -68,7 +68,7 @@ function replaceHeadSeo(html, page) {
 }
 
 function renderHomePage(basePath) {
-  const toolLinks = getIndexableSeoPages()
+  const toolLinks = seoPages
     .map((page) => `
           <a class="seo-tool-card" href="${joinUrlPath(basePath, page.slug)}">
             <span>${escapeHtml(page.h1)}</span>
@@ -79,10 +79,10 @@ function renderHomePage(basePath) {
   return `
       <main class="seo-page">
         <section class="seo-hero">
-          <p class="seo-pill">Diproses lokal di browser</p>
+          <p class="seo-pill">Akses awal terbatas</p>
           <h1>${escapeHtml(homeSeoPage.h1)}</h1>
           <p>${escapeHtml(homeSeoPage.intro)}</p>
-          <a class="seo-primary" href="${joinUrlPath(basePath)}#merge">Mulai dengan Gabung PDF</a>
+          <a class="seo-primary" href="${joinUrlPath(basePath, "merge")}">Mulai dengan Gabung PDF</a>
         </section>
         <section class="seo-section" aria-labelledby="tools-heading">
           <h2 id="tools-heading">Pilih alat PDF</h2>
@@ -93,8 +93,8 @@ function renderHomePage(basePath) {
 }
 
 function renderToolPage(page, basePath) {
-  const appHref = `${joinUrlPath(basePath)}#${page.toolId}`;
-  const relatedTools = getIndexableSeoPages()
+  const appHref = joinUrlPath(basePath, page.slug);
+  const relatedTools = seoPages
     .filter((relatedPage) => relatedPage.toolId !== page.toolId)
     .slice(0, 4)
     .map((relatedPage) => `<a href="${joinUrlPath(basePath, relatedPage.slug)}">${escapeHtml(relatedPage.h1)}</a>`)
@@ -119,7 +119,7 @@ function renderToolPage(page, basePath) {
           <span>${escapeHtml(page.h1)}</span>
         </nav>
         <section class="seo-hero">
-          <p class="seo-pill">Alat PDF privat</p>
+          <p class="seo-pill">PDFin Browser Tools</p>
           <h1>${escapeHtml(page.h1)}</h1>
           <p>${escapeHtml(page.intro)}</p>
           ${prototypeNotice}
@@ -131,7 +131,7 @@ function renderToolPage(page, basePath) {
         </section>
         <section class="seo-section" aria-labelledby="privacy-heading">
           <h2 id="privacy-heading">Privasi file</h2>
-          <p>PDFin dirancang sebagai alat PDF browser-first. Untuk alat inti, file diproses di perangkat Anda tanpa unggah ke server PDFin.</p>
+          <p>Untuk alat browser yang telah diverifikasi, dokumen diproses di perangkat Anda dan tidak dikirim ke server pemrosesan PDFin. Browser tetap dapat mengunduh runtime asset seperti JavaScript, WASM, PDF.js worker, dan OCR language asset.</p>
         </section>
         <section class="seo-section" aria-labelledby="faq-heading">
           <h2 id="faq-heading">Pertanyaan umum</h2>
@@ -141,6 +141,32 @@ function renderToolPage(page, basePath) {
         <section class="seo-section" aria-labelledby="related-heading">
           <h2 id="related-heading">Alat terkait</h2>
           <div class="seo-related">${relatedTools}</div>
+        </section>
+      </main>`;
+}
+
+const privacySeoPage = {
+  slug: "privacy-security",
+  title: "Privasi & keamanan | PDFin",
+  h1: "Privasi & keamanan",
+  description: "Penjelasan faktual tentang lokasi pemrosesan, dependency, storage, network request, dan batasan PDFin Browser Tools.",
+  intro: "PDFin membedakan Browser Tools dari Self-hosted agar lokasi pemrosesan dokumen jelas.",
+  indexable: false,
+};
+
+function renderPrivacyPage(basePath) {
+  return `
+      <main class="seo-page">
+        <nav class="seo-breadcrumb" aria-label="Breadcrumb">
+          <a href="${joinUrlPath(basePath)}">PDFin</a>
+          <span aria-hidden="true">/</span>
+          <span>Privasi & keamanan</span>
+        </nav>
+        <section class="seo-hero">
+          <p class="seo-pill">Akses awal terbatas</p>
+          <h1>Privasi & keamanan</h1>
+          <p>Untuk alat browser yang telah diverifikasi, dokumen diproses di perangkat Anda dan tidak dikirim ke server pemrosesan PDFin. Browser tetap dapat mengunduh runtime asset yang dibutuhkan.</p>
+          <a class="seo-primary" href="${joinUrlPath(basePath, "merge")}">Pilih alat PDF</a>
         </section>
       </main>`;
 }
@@ -247,9 +273,14 @@ export async function prerenderSeoPages() {
   for (const page of seoPages) {
     const pageDir = join(distDir, page.slug);
     await mkdir(pageDir, { recursive: true });
-    const pageHtml = renderPageHtml(templateHtml, page, renderToolPage(page, basePath), { includeClientScript: false });
+    const pageHtml = renderPageHtml(templateHtml, page, renderToolPage(page, basePath), { includeClientScript: true });
     await writeFile(join(pageDir, "index.html"), pageHtml);
   }
+
+  const privacyDir = join(distDir, privacySeoPage.slug);
+  await mkdir(privacyDir, { recursive: true });
+  const privacyHtml = renderPageHtml(templateHtml, privacySeoPage, renderPrivacyPage(basePath), { includeClientScript: true });
+  await writeFile(join(privacyDir, "index.html"), privacyHtml);
 
   await writeFile(join(distDir, "sitemap.xml"), renderSitemap());
   await writeFile(join(distDir, "robots.txt"), renderRobots());

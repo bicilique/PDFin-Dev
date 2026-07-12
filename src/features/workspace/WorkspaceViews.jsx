@@ -142,8 +142,8 @@ export function Sidebar({ t, lang, files, onAdd, onSample, onRemove, onMoveFile,
         {recent.length > 0 && files.length === 0 && (
           <section style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <h2 style={{ font: "var(--weight-semibold) 11.5px/1 var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", margin: 0 }}>{t.sidebar.recent}</h2>
-            {recent.slice(0, 4).map((r, i) => (
-              <span key={i} style={{ font: "11.5px/1.4 var(--font-mono)", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r}</span>
+            {recent.slice(0, 4).map((r) => (
+              <span key={r} style={{ font: "11.5px/1.4 var(--font-mono)", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.toolNames[r] || r}</span>
             ))}
           </section>
         )}

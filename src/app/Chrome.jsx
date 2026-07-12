@@ -1,6 +1,7 @@
 import React from "react";
 import { IconButton, Icons, LangSwitcher, MobileDrawer } from "../components/index.js";
-import { DEFAULT_TOOL_ID, getToolHref } from "./toolRoutes.js";
+import { RELEASE_CONFIG, stageLabel } from "./releaseConfig.js";
+import { DEFAULT_TOOL_ID, getPrivacyHref, getSelfHostedHref, getToolHref } from "./toolRoutes.js";
 
 export function PdfinLogo({ dark = false }) {
   return (
@@ -13,7 +14,7 @@ export function PdfinLogo({ dark = false }) {
   );
 }
 
-export function Header({ lang, setLang, theme, setTheme, current = "home", onHome, onWorkspace }) {
+export function Header({ lang, setLang, theme, setTheme, current = "home", onHome, onWorkspace, onPrivacy, onSelfHosted }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const themeToggleLabel = lang === "id"
     ? (theme === "dark" ? "Beralih ke mode terang" : "Beralih ke mode gelap")
@@ -22,12 +23,14 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
     ? [
         { key: "home", label: "Semua alat", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Ruang kerja", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
-        { key: "privacy", label: "Privasi & keamanan", href: `${import.meta.env.BASE_URL}#privacy-security` },
+        { key: "privacy", label: "Privasi & keamanan", href: getPrivacyHref(), action: onPrivacy },
+        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
       ]
     : [
         { key: "home", label: "All tools", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
-        { key: "privacy", label: "Privacy & security", href: `${import.meta.env.BASE_URL}#privacy-security` },
+        { key: "privacy", label: "Privacy & security", href: getPrivacyHref(), action: onPrivacy },
+        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
       ];
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   return (
@@ -38,6 +41,9 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
       position: "sticky", top: 0, zIndex: 10,
     }}>
       <a className="app-header__logo" href={import.meta.env.BASE_URL} onClick={(e) => { e.preventDefault(); onHome(); }} style={{ textDecoration: "none" }}><PdfinLogo /></a>
+      <span style={{ display: "inline-flex", alignItems: "center", minHeight: 26, padding: "0 9px", borderRadius: "var(--radius-pill)", border: "1px solid var(--privacy-border)", background: "var(--privacy-bg)", color: "var(--privacy-fg)", font: "var(--type-caption)" }}>
+        {stageLabel(lang)}
+      </span>
       <nav className="app-header__nav" style={{ display: "flex", gap: 4, flex: "1 1 180px", minWidth: 0, flexWrap: "wrap" }}>
         {nav.map((n) => {
           const active = current === n.key;
@@ -89,12 +95,14 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
         current={current}
         onHome={onHome}
         onWorkspace={onWorkspace}
+        onPrivacy={onPrivacy}
+        onSelfHosted={onSelfHosted}
       />
     </header>
   );
 }
 
-export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, onThemeToggle, current, onHome, onWorkspace }) {
+export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, onThemeToggle, current, onHome, onWorkspace, onPrivacy, onSelfHosted }) {
   const themeToggleLabel = lang === "id"
     ? (theme === "dark" ? "Beralih ke mode terang" : "Beralih ke mode gelap")
     : (theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
@@ -103,12 +111,14 @@ export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, on
     ? [
         { key: "home", label: "Semua alat", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Ruang kerja", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
-        { key: "privacy", label: "Privasi & keamanan", href: `${import.meta.env.BASE_URL}#privacy-security` },
+        { key: "privacy", label: "Privasi & keamanan", href: getPrivacyHref(), action: onPrivacy },
+        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
       ]
     : [
         { key: "home", label: "All tools", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
-        { key: "privacy", label: "Privacy & security", href: `${import.meta.env.BASE_URL}#privacy-security` },
+        { key: "privacy", label: "Privacy & security", href: getPrivacyHref(), action: onPrivacy },
+        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
       ];
   const linkStyle = ({ active = false } = {}) => ({
     minHeight: 48,
@@ -143,7 +153,7 @@ export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, on
           </a>
         ))}
         <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" style={{ ...linkStyle(), gap: 8 }} onClick={onClose}>{Icons.github(18)}GitHub</a>
-        <a href="mailto:afiffaizianur@gmail.com" style={linkStyle()} onClick={onClose}>Self-hosting / on-premise</a>
+        <a href="mailto:afiffaizianur@gmail.com?subject=PDFin%20early%20access%20feedback" style={linkStyle()} onClick={onClose}>{lang === "id" ? "Kirim masukan" : "Send feedback"}</a>
       </nav>
       <div className="mobile-drawer__section">
         <span className="mobile-drawer__label">{lang === "id" ? "Bahasa" : "Language"}</span>
@@ -156,19 +166,21 @@ export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, on
   );
 }
 
-export function Footer({ lang }) {
+export function Footer({ lang, onPrivacy, onSelfHosted }) {
   const t = lang === "id"
     ? {
         privacy: "Privasi & keamanan",
         github: "GitHub",
-        selfHosting: "Self-hosting / on-premise",
-        note: "PDFin memproses file langsung di browser Anda. File tidak diunggah ke server.",
+        feedback: "Kirim masukan",
+        selfHosting: "Self-hosted",
+        note: "PDFin Browser Tools berada dalam akses awal terbatas. Untuk alat yang telah diverifikasi, dokumen diproses di browser Anda dan tidak dikirim ke server pemrosesan PDFin.",
       }
     : {
         privacy: "Privacy & security",
         github: "GitHub",
-        selfHosting: "Self-hosting / on-premise",
-        note: "PDFin processes files directly in your browser. Files are not uploaded to a server.",
+        feedback: "Send feedback",
+        selfHosting: "Self-hosted",
+        note: "PDFin Browser Tools are in limited early access. For verified tools, documents are processed in your browser and are not sent to PDFin processing servers.",
       };
   const linkStyle = { font: "var(--type-caption)", color: "var(--text-link)" };
   const iconLinkStyle = { ...linkStyle, display: "inline-flex", alignItems: "center", gap: 6 };
@@ -176,9 +188,10 @@ export function Footer({ lang }) {
     <footer className="app-footer" style={{ borderTop: "1px solid var(--border-default)", padding: "28px clamp(16px, 4vw, 32px)", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 18, background: "var(--surface-card)" }}>
       <PdfinLogo />
       <span style={{ font: "var(--type-caption)", color: "var(--text-muted)", flex: 1 }}>{t.note}</span>
-      <a href={`${import.meta.env.BASE_URL}#privacy-security`} style={linkStyle}>{t.privacy}</a>
+      <a href={getPrivacyHref()} onClick={(event) => { if (onPrivacy) { event.preventDefault(); onPrivacy(); } }} style={linkStyle}>{t.privacy}</a>
       <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" style={iconLinkStyle}>{Icons.github(16)}{t.github}</a>
-      <a href="mailto:afiffaizianur@gmail.com" style={linkStyle}>{t.selfHosting}</a>
+      {RELEASE_CONFIG.enableSelfHostedPage && <a href={getSelfHostedHref()} onClick={(event) => { if (onSelfHosted) { event.preventDefault(); onSelfHosted(); } }} style={linkStyle}>{t.selfHosting}</a>}
+      <a href="mailto:afiffaizianur@gmail.com?subject=PDFin%20early%20access%20feedback" style={linkStyle}>{t.feedback}</a>
       <a href="mailto:afiffaizianur@gmail.com" style={linkStyle}>afiffaizianur@gmail.com</a>
     </footer>
   );

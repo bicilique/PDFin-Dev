@@ -1,110 +1,107 @@
 import { Badge, Icons, ToolTile, toolIcon } from "../../components/index.js";
-import { getToolHref, PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../../app/toolRoutes.js";
+import { getPrivacyHref, getToolHref, PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../../app/toolRoutes.js";
+import { stageLabel } from "../../app/releaseConfig.js";
 import { PDFIN_T } from "../workspace/i18n.js";
 
 const toolCategories = [
   { id: "pages", tools: ["merge", "split", "organize", "rotate", "pagenum"] },
   { id: "conversion", tools: ["compress", "img2pdf", "pdf2img", "ocr"] },
-  { id: "security", tools: ["protect", "unlock", "watermark", "metadata", "sign", "flatten"] },
+  { id: "security", tools: ["protect", "watermark", "metadata", "sign", "flatten", "unlock"] },
 ];
 
 const factIcons = {
-  free: Icons.check(18),
   account: Icons.userCheck(18),
   local: Icons.desktop(18),
-  external: Icons.external(15),
+  limited: Icons.info(18),
 };
 
-export function HomeScreen({ lang }) {
+function feedbackHref(lang) {
+  const subject = encodeURIComponent("PDFin early access feedback");
+  const body = encodeURIComponent(lang === "id"
+    ? "Tool yang digunakan:\nBerhasil/gagal:\nBrowser dan perangkat:\nRingkasan masalah:\nLangkah reproduksi:\nIzin dihubungi kembali: ya/tidak\n\nJangan lampirkan dokumen asli, password, API key, atau informasi rahasia."
+    : "Tool used:\nSucceeded/failed:\nBrowser and device:\nIssue summary:\nReproduction steps:\nPermission to be contacted: yes/no\n\nDo not attach original documents, passwords, API keys, or confidential information.");
+  return `mailto:afiffaizianur@gmail.com?subject=${subject}&body=${body}`;
+}
+
+export function HomeScreen({ lang, onOpenWorkspace }) {
   const t = lang === "id"
     ? {
-        eyebrow: "Diproses langsung di browser Anda",
-        h1: "Alat PDF gratis yang bekerja di perangkat Anda.",
-        sub: "Gabungkan, pisahkan, atur, dan kelola PDF tanpa mengunggah file ke server dan tanpa membuat akun.",
-        explore: "Jelajahi alat",
-        github: "Lihat di GitHub",
-        githubLabel: "Lihat di GitHub (membuka tab baru)",
-        trustFacts: ["Gratis digunakan", "Tanpa akun", "Diproses lokal di browser"],
-        privacyLink: "Pelajari privasi dan batasan alat",
+        eyebrow: "PDFin Browser Tools",
+        h1: "Kelola PDF langsung di browser.",
+        sub: "Gunakan alat PDF tanpa membuat akun. Untuk alat yang mendukung pemrosesan lokal, dokumen diproses di perangkat Anda dan tidak dikirim ke server pemrosesan PDFin.",
+        notice: "PDFin masih dalam akses awal terbatas. Simpan file asli sebelum memproses dokumen.",
+        explore: "Pilih alat PDF",
+        feedback: "Kirim masukan",
+        trustFacts: ["Tanpa akun untuk fungsi dasar", "Processing location dijelaskan per tool", stageLabel("id")],
+        privacyLink: "Baca Privacy & Security",
         categories: {
           pages: "Kelola halaman",
           conversion: "Konversi dan optimasi",
           security: "Keamanan dan informasi",
         },
         categoryDesc: {
-          pages: "Susun, pisahkan, gabungkan, dan beri nomor halaman PDF.",
-          conversion: "Ubah format, kurangi ukuran, atau jadikan hasil pindaian dapat dicari.",
-          security: "Kelola password, watermark, metadata, paraf visual, dan perataan PDF.",
+          pages: "Gabungkan, pisahkan, susun, putar, dan beri nomor halaman PDF.",
+          conversion: "Kurangi ukuran, ubah format, atau buat PDF hasil pindaian dapat dicari.",
+          security: "Tambahkan password, watermark, paraf visual, metadata, dan flatten sesuai dukungan alat.",
         },
         inDevelopment: "Dalam pengembangan",
-        privacyTitle: "Privasi dan batasan alat",
-        privacyIntro: "PDFin dirancang untuk memproses dokumen di browser, dengan batasan yang perlu dipahami sebelum menangani file penting.",
+        privacyTitle: "Batasan yang perlu diketahui",
         privacyFacts: [
-          "File PDF dan gambar diproses di browser Anda dan tidak diunggah ke server PDFin.",
-          "Browser menggunakan memori sementara saat memuat, melihat pratinjau, dan memproses dokumen.",
-          "Unduh dan simpan sendiri file hasil pemrosesan.",
-          "PDF besar bergantung pada kapasitas memori dan performa perangkat/browser.",
-          "Password PDF tidak dapat dipulihkan oleh PDFin.",
+          "Browser mengunduh JavaScript, PDF.js worker, WASM, dan OCR language assets saat diperlukan.",
+          "Mengunduh runtime asset bukan berarti dokumen Anda diunggah.",
+          "Dokumen besar bergantung pada memori dan performa perangkat/browser.",
+          "Password PDF dan hasil OCR tidak boleh dikirim melalui feedback.",
           "Paraf visual PDF bukan tanda tangan elektronik atau tanda tangan digital berbasis sertifikat.",
-          "Buka PDF terkunci masih dalam pengembangan.",
-          "Preferensi bahasa/tema dan daftar nama file terakhir dapat tersimpan di localStorage browser.",
+          "Unlock PDF masih dalam pengembangan dan tidak ditampilkan sebagai fitur final.",
+          "Preferensi bahasa/tema dapat tersimpan di localStorage browser; recent filename tidak disimpan.",
         ],
-        openTitle: "Terbuka untuk dipelajari dan dijalankan sendiri",
-        openBody: "PDFin dibuat sebagai alat PDF gratis dengan pemrosesan di browser. Kode sumber tersedia di GitHub untuk dipelajari, digunakan, dan dikembangkan lebih lanjut.",
-        contact: "Hubungi untuk self-hosting",
-        note: "Memerlukan PDFin untuk lingkungan internal, self-hosting, atau on-premise? Hubungi kami untuk berdiskusi.",
       }
     : {
-        eyebrow: "Processed directly in your browser",
-        h1: "Free PDF tools that work on your device.",
-        sub: "Merge, split, organize, and manage PDFs without uploading files to a server and without creating an account.",
-        explore: "Explore tools",
-        github: "View on GitHub",
-        githubLabel: "View on GitHub (opens in a new tab)",
-        trustFacts: ["Free to use", "No account", "Local browser processing"],
-        privacyLink: "Learn about privacy and tool limits",
+        eyebrow: "PDFin Browser Tools",
+        h1: "Manage PDFs directly in your browser.",
+        sub: "Use PDF tools without creating an account. For tools that support local processing, documents are processed on your device and are not sent to PDFin processing servers.",
+        notice: "PDFin is still in limited early access. Keep your original files before processing documents.",
+        explore: "Choose PDF tool",
+        feedback: "Send feedback",
+        trustFacts: ["No account for basic tools", "Processing location explained per tool", stageLabel("en")],
+        privacyLink: "Read Privacy & Security",
         categories: {
           pages: "Manage pages",
           conversion: "Conversion and optimization",
           security: "Security and information",
         },
         categoryDesc: {
-          pages: "Arrange, split, merge, rotate, and number PDF pages.",
-          conversion: "Convert formats, reduce size, or make scanned PDFs searchable.",
-          security: "Manage passwords, watermarks, metadata, visual initials, and flattening.",
+          pages: "Merge, split, organize, rotate, and number PDF pages.",
+          conversion: "Reduce size, convert formats, or make scanned PDFs searchable.",
+          security: "Add passwords, watermarks, visual initials, metadata, and flattening where supported.",
         },
         inDevelopment: "In development",
-        privacyTitle: "Privacy and tool limits",
-        privacyIntro: "PDFin is designed to process documents in your browser, with practical limits to understand before handling important files.",
+        privacyTitle: "Known limits",
         privacyFacts: [
-          "PDF and image files are processed in your browser and are not uploaded to a PDFin server.",
-          "Your browser uses temporary memory while loading, previewing, and processing documents.",
-          "Download and store processed files yourself.",
-          "Very large PDFs depend on your browser memory and device performance.",
-          "PDF passwords cannot be recovered by PDFin.",
+          "The browser downloads JavaScript, the PDF.js worker, WASM, and OCR language assets when needed.",
+          "Downloading runtime assets does not mean your document is uploaded.",
+          "Large documents depend on browser memory and device performance.",
+          "PDF passwords and OCR results must not be sent through feedback.",
           "Visual PDF initials are not electronic signatures or certificate-backed digital signatures.",
-          "Unlocking password-protected PDFs is still in development.",
-          "Language/theme preferences and recent file names may be stored in browser localStorage.",
+          "Unlock PDF is still in development and is not shown as a final feature.",
+          "Language/theme preferences may be stored in browser localStorage; recent filenames are not stored.",
         ],
-        openTitle: "Open to study and self-host",
-        openBody: "PDFin is built as a free PDF tool with browser-based processing. The source code is available on GitHub to study, use, and develop further.",
-        contact: "Contact for self-hosting",
-        note: "Need PDFin for an internal environment, self-hosting, or on-premise use? Contact us to discuss.",
       };
   const strings = PDFIN_T[lang];
-  const trustKeys = ["free", "account", "local"];
+  const trustKeys = ["account", "local", "limited"];
 
   return (
     <main id="home-main" tabIndex={-1}>
       <section className="home-hero" style={{ background: "var(--gradient-hero)", borderBottom: "1px solid var(--border-default)", padding: "48px clamp(16px, 5vw, 32px) 36px" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", display: "grid", gap: 22 }}>
-          <div style={{ display: "grid", gap: 14, maxWidth: 700 }}>
+        <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gap: 22 }}>
+          <div style={{ display: "grid", gap: 14, maxWidth: 740 }}>
             <span style={{ width: "fit-content", display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: "var(--radius-pill)", border: "1px solid var(--privacy-border)", background: "var(--privacy-bg)", color: "var(--privacy-fg)", font: "var(--type-caption)" }}>
-              {factIcons.local}
+              {Icons.privacy(18)}
               {t.eyebrow}
             </span>
-            <h1 style={{ font: "var(--type-display)", letterSpacing: "var(--tracking-tight)", maxWidth: 680 }}>{t.h1}</h1>
-            <p style={{ font: "var(--type-body)", color: "var(--text-body)", maxWidth: 620, margin: 0 }}>{t.sub}</p>
+            <h1 style={{ font: "var(--type-display)", letterSpacing: "var(--tracking-tight)", maxWidth: 720 }}>{t.h1}</h1>
+            <p style={{ font: "var(--type-body)", color: "var(--text-body)", maxWidth: 680, margin: 0 }}>{t.sub}</p>
+            <p style={{ margin: 0, padding: "10px 12px", width: "fit-content", border: "1px solid var(--status-warning-border)", borderRadius: "var(--radius-md)", background: "var(--status-warning-bg)", color: "var(--status-warning-fg)", font: "var(--type-body-sm)" }}>{t.notice}</p>
           </div>
           <div className="home-hero__actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <a href="#tool-categories" style={{
@@ -112,16 +109,16 @@ export function HomeScreen({ lang }) {
               borderRadius: "var(--radius-md)", background: "var(--action-primary)", color: "var(--color-accent-contrast)",
               font: "var(--weight-semibold) var(--text-base)/1 var(--font-sans)", textDecoration: "none",
             }}>{t.explore}</a>
-            <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" aria-label={t.githubLabel} style={{
-              display: "inline-flex", minHeight: 44, alignItems: "center", justifyContent: "center", gap: 8, padding: "0 16px",
+            <a href={feedbackHref(lang)} style={{
+              display: "inline-flex", minHeight: 44, alignItems: "center", justifyContent: "center", padding: "0 16px",
               borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)", background: "var(--surface-card)",
               color: "var(--text-brand)", font: "var(--weight-semibold) var(--text-base)/1 var(--font-sans)", textDecoration: "none",
-            }}>{Icons.github(18)}{t.github}{factIcons.external}</a>
+            }}>{t.feedback}</a>
           </div>
         </div>
       </section>
 
-      <section className="home-trust" aria-label={lang === "id" ? "Fakta kepercayaan" : "Trust facts"} style={{ maxWidth: "var(--container-max)", margin: "0 auto", padding: "24px clamp(16px, 5vw, 32px) 0" }}>
+      <section className="home-trust" aria-label={lang === "id" ? "Fakta produk" : "Product facts"} style={{ maxWidth: "var(--container-max)", margin: "0 auto", padding: "24px clamp(16px, 5vw, 32px) 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {t.trustFacts.map((fact, index) => (
             <span key={fact} style={{
@@ -133,7 +130,7 @@ export function HomeScreen({ lang }) {
               {fact}
             </span>
           ))}
-          <a href="#privacy-security" style={{ font: "var(--type-label)", color: "var(--text-link)", padding: "8px 2px" }}>{t.privacyLink}</a>
+          <a href={getPrivacyHref()} style={{ font: "var(--type-label)", color: "var(--text-link)", padding: "8px 2px" }}>{t.privacyLink}</a>
         </div>
       </section>
 
@@ -152,6 +149,10 @@ export function HomeScreen({ lang }) {
                     <ToolTile
                       key={toolId}
                       href={isPrototype ? undefined : getToolHref(toolId)}
+                      onClick={isPrototype || !onOpenWorkspace ? undefined : (event) => {
+                        event.preventDefault();
+                        onOpenWorkspace(toolId);
+                      }}
                       disabled={isPrototype}
                       icon={toolIcon(toolId, 24)}
                       title={strings.toolNames[toolId]}
@@ -166,12 +167,9 @@ export function HomeScreen({ lang }) {
         </div>
       </section>
 
-      <section id="privacy-security" style={{ borderTop: "1px solid var(--border-default)", borderBottom: "1px solid var(--border-default)", background: "var(--surface-card)" }}>
+      <section style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-card)" }}>
         <div style={{ maxWidth: "var(--container-max)", margin: "0 auto", padding: "36px clamp(16px, 5vw, 32px)", display: "grid", gap: 18 }}>
-          <div style={{ display: "grid", gap: 6, maxWidth: 760 }}>
-            <h2 style={{ font: "var(--type-h2)" }}>{t.privacyTitle}</h2>
-            <p style={{ margin: 0, font: "var(--type-body)", color: "var(--text-body)" }}>{t.privacyIntro}</p>
-          </div>
+          <h2 style={{ margin: 0, font: "var(--type-h2)" }}>{t.privacyTitle}</h2>
           <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
             {t.privacyFacts.map((fact) => (
               <li key={fact} style={{
@@ -184,18 +182,6 @@ export function HomeScreen({ lang }) {
               </li>
             ))}
           </ul>
-        </div>
-      </section>
-
-      <section style={{ maxWidth: "var(--container-max)", margin: "0 auto", padding: "40px clamp(16px, 5vw, 32px) 56px" }}>
-        <div style={{ display: "grid", gap: 16, maxWidth: 760 }}>
-          <h2 style={{ font: "var(--type-h2)" }}>{t.openTitle}</h2>
-          <p style={{ margin: 0, font: "var(--type-body)", color: "var(--text-body)" }}>{t.openBody}</p>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" aria-label={t.githubLabel} style={{ display: "inline-flex", minHeight: 42, alignItems: "center", gap: 8, padding: "0 14px", borderRadius: "var(--radius-md)", background: "var(--surface-brand-subtle)", color: "var(--text-brand)", font: "var(--type-label)", textDecoration: "none" }}>{Icons.github(18)}{t.github}{factIcons.external}</a>
-            <a href="mailto:afiffaizianur@gmail.com" style={{ display: "inline-flex", minHeight: 42, alignItems: "center", padding: "0 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)", background: "var(--surface-card)", color: "var(--text-body)", font: "var(--type-label)", textDecoration: "none" }}>{t.contact}</a>
-          </div>
-          <p style={{ margin: 0, font: "var(--type-body-sm)", color: "var(--text-muted)" }}>{t.note}</p>
         </div>
       </section>
     </main>

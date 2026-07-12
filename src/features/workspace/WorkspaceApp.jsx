@@ -1,6 +1,7 @@
 import React from "react";
 import { Badge, Button, IconButton, MobileBottomSheet, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
 import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "../../app/theme.js";
+import { getToolFromHash, getToolFromPath, getToolHref } from "../../app/toolRoutes.js";
 import { PDFIN_T } from "./i18n.js";
 import { PdfEngine } from "./engine/pdfEngine.js";
 import { PdfProcess } from "./engine/pdfProcess.js";
@@ -33,8 +34,7 @@ function createPageInstance(data) {
 const pageIdentity = (page) => page.pageInstanceId || page.uid;
 
 function hashTool() {
-  const h = (location.hash || "").replace("#", "");
-  return TOOL_IDS.includes(h) ? h : "merge";
+  return getToolFromPath() || getToolFromHash() || "merge";
 }
 
 function useMediaQuery(query) {
@@ -120,7 +120,14 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   const [workspaceDrag, setWorkspaceDrag] = React.useState(false);
   const [lastMovedPageUid, setLastMovedPageUid] = React.useState(null);
   const [focusFirstSelectionTick, setFocusFirstSelectionTick] = React.useState(0);
-  const [recent, setRecent] = React.useState(() => { try { return JSON.parse(localStorage.getItem("pdfin-ws-recent") || "[]"); } catch (e) { return []; } });
+  const [recent, setRecent] = React.useState(() => {
+    try {
+      if (localStorage.getItem("pdfin-ws-recent")) localStorage.removeItem("pdfin-ws-recent");
+      return JSON.parse(localStorage.getItem("pdfin-ws-recent-tools") || "[]").filter((id) => TOOL_IDS.includes(id));
+    } catch {
+      return [];
+    }
+  });
   const undoStack = React.useRef([]);
   const cancelled = React.useRef(false);
   const duplicatingRef = React.useRef(false);
@@ -148,9 +155,13 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   }, []);
 
   React.useEffect(() => {
-    const onHash = () => switchTool(hashTool(), false);
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const onRoute = () => switchTool(hashTool(), false);
+    window.addEventListener("hashchange", onRoute);
+    window.addEventListener("popstate", onRoute);
+    return () => {
+      window.removeEventListener("hashchange", onRoute);
+      window.removeEventListener("popstate", onRoute);
+    };
   });
 
   React.useEffect(() => {
@@ -185,7 +196,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     undoStack.current = [];
     if (!keep) { PdfEngine.reset(); PdfProcess.clearCache(); setFiles([]); setPages([]); setStage("empty"); }
     else setStage(files.length ? "ready" : "empty");
-    if (pushHash) location.hash = next;
+    if (pushHash) window.history.pushState(null, "", getToolHref(next));
     setSwitcher(false);
   };
 
@@ -204,7 +215,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     setErrMsg("");
 
     const seen = new Set((def.multiFile ? files : []).map((f) => f.fingerprint).filter(Boolean));
-    const addedReadyNames = [];
+    let addedReady = false;
 
     for (const file of incoming) {
       const fingerprint = await fileFingerprint(file);
@@ -256,7 +267,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
           }
           return [...kept, ...extra];
         });
-        addedReadyNames.push(rec.name);
+        addedReady = true;
       } catch (e) {
         console.warn(e);
         const message = classifyFileError(e, lang);
@@ -265,10 +276,10 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
       }
     }
 
-    if (addedReadyNames.length) {
-      const names = [...new Set([...addedReadyNames, ...recent])].slice(0, 6);
-      setRecent(names);
-      localStorage.setItem("pdfin-ws-recent", JSON.stringify(names));
+    if (addedReady) {
+      const toolIds = [tool, ...recent.filter((id) => id !== tool)].slice(0, 6);
+      setRecent(toolIds);
+      localStorage.setItem("pdfin-ws-recent-tools", JSON.stringify(toolIds));
     }
   };
 

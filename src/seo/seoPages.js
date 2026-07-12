@@ -1,4 +1,5 @@
 import { PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../features/workspace/toolCatalog.js";
+import { RELEASE_CONFIG } from "../app/releaseConfig.js";
 
 export const SITE_ORIGIN = "https://www.pdfin.fun";
 export const SITE_BASE_PATH = "/";
@@ -179,16 +180,16 @@ const seoSlugs = {
 export const seoPages = WORKSPACE_TOOL_IDS.map((toolId) => ({
   slug: seoSlugs[toolId] || toolId,
   toolId,
-  indexable: !PROTOTYPE_TOOL_IDS.has(toolId),
+  indexable: RELEASE_CONFIG.enablePublicIndexing && !PROTOTYPE_TOOL_IDS.has(toolId),
   ...toolSeoCopy[toolId],
 }));
 
 export const homeSeoPage = {
   slug: "",
-  title: "PDFin | Alat PDF privat di browser",
-  h1: "Alat PDF gratis yang bekerja di perangkat Anda",
-  description: "PDFin adalah kumpulan alat PDF gratis yang memproses file di browser tanpa mengunggah file ke server.",
-  intro: "Gabung, pisah, kompres, atur halaman, dan kelola PDF langsung dari perangkat Anda tanpa membuat akun.",
+  title: "PDFin | Kelola PDF langsung di browser",
+  h1: "Kelola PDF langsung di browser",
+  description: "PDFin Browser Tools membantu mengelola PDF tanpa akun. Untuk alat yang mendukung pemrosesan lokal, dokumen diproses di perangkat Anda.",
+  intro: "PDFin masih dalam akses awal terbatas. Pilih alat PDF, simpan file asli, dan baca batasan privasi sebelum memproses dokumen penting.",
   indexable: true,
 };
 

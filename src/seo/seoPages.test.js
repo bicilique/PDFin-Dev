@@ -14,19 +14,18 @@ describe("SEO page catalog", () => {
     expect(slugs.every((slug) => /^[a-z0-9]+$/.test(slug))).toBe(true);
   });
 
-  it("keeps prototype tools out of the sitemap index set", () => {
+  it("keeps all tool pages out of the sitemap index set during limited access", () => {
     const indexableToolIds = getIndexableSeoPages().map((page) => page.toolId);
 
-    for (const prototypeToolId of PROTOTYPE_TOOL_IDS) {
-      expect(indexableToolIds).not.toContain(prototypeToolId);
-    }
+    expect(indexableToolIds).toEqual([]);
   });
 
-  it("marks all production tools as indexable", () => {
+  it("still tracks prototype tools separately from production tools", () => {
     const prototypeToolIds = Array.from(PROTOTYPE_TOOL_IDS);
     const productionToolIds = WORKSPACE_TOOL_IDS.filter((toolId) => !prototypeToolIds.includes(toolId));
 
-    expect(getIndexableSeoPages().map((page) => page.toolId)).toEqual(productionToolIds);
+    expect(prototypeToolIds).toContain("unlock");
+    expect(productionToolIds).toContain("merge");
   });
 
   it("uses non-misleading SEO copy for the visual initials tool", () => {
@@ -44,7 +43,7 @@ describe("SEO page catalog", () => {
     const protect = seoPages.find((page) => page.toolId === "protect");
     const unlock = seoPages.find((page) => page.toolId === "unlock");
 
-    expect(protect.indexable).toBe(true);
+    expect(protect.indexable).toBe(false);
     expect(protect.description).toMatch(/password/i);
     expect(protect.description).not.toMatch(/prototipe|simulasi/i);
     expect(unlock.indexable).toBe(false);
@@ -55,8 +54,8 @@ describe("SEO page catalog", () => {
     expect(SITE_URL).toBe("https://www.pdfin.fun");
     expect(SITE_BASE_PATH).toBe("/");
     expect(homeSeoPage.indexable).toBe(true);
-    expect(homeSeoPage.h1).toBe("Alat PDF gratis yang bekerja di perangkat Anda");
-    expect(homeSeoPage.description).toMatch(/tanpa mengunggah file ke server/i);
+    expect(homeSeoPage.h1).toBe("Kelola PDF langsung di browser");
+    expect(homeSeoPage.description).toMatch(/browser tools/i);
   });
 
   it("has complete metadata for every static page", () => {

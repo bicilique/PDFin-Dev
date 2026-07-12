@@ -1,11 +1,16 @@
 import React from "react";
 import { Header, Footer } from "./Chrome.jsx";
 import { HomeScreen } from "../features/home/HomeScreen.jsx";
+import { PrivacySecurityPage } from "../features/privacy/PrivacySecurityPage.jsx";
+import { SelfHostedDraftPage } from "../features/selfHosted/SelfHostedDraftPage.jsx";
 import { WorkspaceApp } from "../features/workspace/WorkspaceApp.jsx";
-import { DEFAULT_TOOL_ID, getToolFromHash, getToolHref, isWorkspaceRoute } from "./toolRoutes.js";
+import { RELEASE_CONFIG } from "./releaseConfig.js";
+import { DEFAULT_TOOL_ID, getToolFromHash, getToolFromPath, getToolHref, isPrivacyRoute, isSelfHostedRoute, isWorkspaceRoute } from "./toolRoutes.js";
 import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "./theme.js";
 
 function getInitialScreen() {
+  if (isPrivacyRoute()) return "privacy";
+  if (isSelfHostedRoute() && RELEASE_CONFIG.enableSelfHostedPage) return "self-hosted";
   return isWorkspaceRoute() ? "workspace" : "home";
 }
 
@@ -39,7 +44,7 @@ export function App() {
   }, []);
 
   React.useEffect(() => {
-    if (screen === "workspace" && !getToolFromHash()) {
+    if (screen === "workspace" && !getToolFromHash() && !getToolFromPath()) {
       window.history.replaceState(null, "", getToolHref(DEFAULT_TOOL_ID));
     }
   }, [screen]);
@@ -54,9 +59,19 @@ export function App() {
     setScreen("workspace");
   };
 
+  const openPrivacy = () => {
+    window.history.pushState(null, "", `${import.meta.env.BASE_URL}privacy-security/`);
+    setScreen("privacy");
+  };
+
+  const openSelfHosted = () => {
+    window.history.pushState(null, "", `${import.meta.env.BASE_URL}self-hosted/`);
+    setScreen(RELEASE_CONFIG.enableSelfHostedPage ? "self-hosted" : "home");
+  };
+
   const focusHomeMain = (event) => {
     event.preventDefault();
-    const target = document.getElementById("home-main");
+    const target = document.getElementById(screen === "privacy" ? "privacy-main" : "home-main");
     if (target) target.focus();
   };
 
@@ -64,24 +79,34 @@ export function App() {
     return <WorkspaceApp initialLang={lang} initialTheme={theme} onHome={openHome} />;
   }
 
+  const content = screen === "privacy"
+    ? <PrivacySecurityPage lang={lang} />
+    : screen === "self-hosted"
+      ? <SelfHostedDraftPage lang={lang} />
+      : <HomeScreen lang={lang} onOpenWorkspace={openWorkspace} />;
+
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--surface-page)" }}>
-      <a className="skip-link" href="#home-main" onClick={focusHomeMain}>
-        {lang === "id" ? "Lewati ke katalog alat" : "Skip to tool catalog"}
+      <a className="skip-link" href={screen === "privacy" ? "#privacy-main" : "#home-main"} onClick={focusHomeMain}>
+        {screen === "privacy"
+          ? (lang === "id" ? "Lewati ke konten privasi" : "Skip to privacy content")
+          : (lang === "id" ? "Lewati ke katalog alat" : "Skip to tool catalog")}
       </a>
       <Header
         lang={lang}
         setLang={setLang}
         theme={theme}
         setTheme={setExplicitTheme}
-        current="home"
+        current={screen === "self-hosted" ? "self-hosted" : screen === "privacy" ? "privacy" : "home"}
         onHome={openHome}
         onWorkspace={() => openWorkspace(DEFAULT_TOOL_ID)}
+        onPrivacy={openPrivacy}
+        onSelfHosted={openSelfHosted}
       />
-      <div style={{ flex: 1 }} data-screen-label="Homepage">
-        <HomeScreen lang={lang} />
+      <div style={{ flex: 1 }} data-screen-label={screen === "privacy" ? "Privacy & Security" : screen === "self-hosted" ? "Self-hosted" : "Homepage"}>
+        {content}
       </div>
-      <Footer lang={lang} />
+      <Footer lang={lang} onPrivacy={openPrivacy} onSelfHosted={openSelfHosted} />
     </div>
   );
 }

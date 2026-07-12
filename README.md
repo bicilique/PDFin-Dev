@@ -1,6 +1,6 @@
 # PDFin
 
-PDFin is a browser-first PDF tools web app in limited early access. For verified Browser Tools, documents are processed in the user's browser and are not sent to PDFin processing servers.
+PDFin is a browser-first PDF tools web app with a Self-hosted product page for customer-managed API deployments. For verified Browser Tools, documents are processed in the user's browser and are not sent to PDFin processing servers.
 
 ## Product flow
 
@@ -8,7 +8,7 @@ PDFin uses one canonical workspace for actual PDF work. The home page is a tool 
 
 The workspace is where users add files, preview pages, configure tool-specific settings, process PDFs in the browser when the tool supports local processing, download the result, and continue to compatible next actions. Compatibility entries such as `/workspace` or `/#workspace` should lead users back into the canonical workspace model rather than a separate processing flow.
 
-PDFin Self-hosted is a separate product line for customer-managed infrastructure. Its API is part of Self-hosted and must not be described as a PDFin hosted/cloud API. The current product definition lives in `design/product/self-hosted-product-definition.md`; it is a planning artifact, not a public availability promise.
+PDFin Self-hosted is a separate product line for customer-managed infrastructure and local network deployments. Its API is part of Self-hosted and must not be described as a PDFin hosted/cloud API. The current product definition lives in `design/product/self-hosted-product-definition.md`; it is a planning artifact, not a public availability promise.
 
 ## Local development
 
@@ -28,7 +28,7 @@ npm run preview
 
 The production GitHub Pages deployment uses the custom domain `https://www.pdfin.fun/`, so built assets are served from `/`.
 
-The build also pre-renders static pages into `dist/`, including the home page, tool direct routes, `privacy-security/`, `sitemap.xml`, `robots.txt`, and a GitHub Pages `404.html` fallback. During limited early access, only the homepage is included in the sitemap by default; tool pages are `noindex` until public indexing is explicitly enabled.
+The build also pre-renders static pages into `dist/`, including the home page, tool direct routes, `privacy-security/`, `self-hosted/`, `sitemap.xml`, `robots.txt`, and a GitHub Pages `404.html` fallback. Tool pages are `noindex` until public indexing is explicitly enabled; the homepage and Self-hosted page are included in the sitemap.
 
 ## Project layout
 

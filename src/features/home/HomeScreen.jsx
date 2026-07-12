@@ -1,6 +1,5 @@
 import { Badge, Icons, ToolTile, toolIcon } from "../../components/index.js";
-import { getPrivacyHref, getToolHref, PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../../app/toolRoutes.js";
-import { stageLabel } from "../../app/releaseConfig.js";
+import { getPrivacyHref, getSelfHostedHref, getToolHref, PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../../app/toolRoutes.js";
 import { PDFIN_T } from "../workspace/i18n.js";
 
 const toolCategories = [
@@ -12,11 +11,11 @@ const toolCategories = [
 const factIcons = {
   account: Icons.userCheck(18),
   local: Icons.desktop(18),
-  limited: Icons.info(18),
+  selfHosted: Icons.server(18),
 };
 
 function feedbackHref(lang) {
-  const subject = encodeURIComponent("PDFin early access feedback");
+  const subject = encodeURIComponent("PDFin feedback");
   const body = encodeURIComponent(lang === "id"
     ? "Tool yang digunakan:\nBerhasil/gagal:\nBrowser dan perangkat:\nRingkasan masalah:\nLangkah reproduksi:\nIzin dihubungi kembali: ya/tidak\n\nJangan lampirkan dokumen asli, password, API key, atau informasi rahasia."
     : "Tool used:\nSucceeded/failed:\nBrowser and device:\nIssue summary:\nReproduction steps:\nPermission to be contacted: yes/no\n\nDo not attach original documents, passwords, API keys, or confidential information.");
@@ -29,11 +28,14 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
         eyebrow: "PDFin Browser Tools",
         h1: "Kelola PDF langsung di browser.",
         sub: "Gunakan alat PDF tanpa membuat akun. Untuk alat yang mendukung pemrosesan lokal, dokumen diproses di perangkat Anda dan tidak dikirim ke server pemrosesan PDFin.",
-        notice: "PDFin masih dalam akses awal terbatas. Simpan file asli sebelum memproses dokumen.",
         explore: "Pilih alat PDF",
         feedback: "Kirim masukan",
-        trustFacts: ["Tanpa akun untuk fungsi dasar", "Processing location dijelaskan per tool", stageLabel("id")],
+        trustFacts: ["Tanpa akun untuk fungsi dasar", "Processing location dijelaskan per tool", "Self-hosted API untuk local network"],
         privacyLink: "Baca Privacy & Security",
+        selfHostedTitle: "Memerlukan API untuk aplikasi internal?",
+        selfHostedBody: "PDFin Self-hosted menjalankan pemrosesan PDF di infrastruktur Anda dan menyediakan API untuk workflow internal, automation, dan integrasi aplikasi.",
+        selfHostedStatus: "Dijalankan di local network",
+        selfHostedCta: "Pelajari Self-hosted",
         categories: {
           pages: "Kelola halaman",
           conversion: "Konversi dan optimasi",
@@ -60,11 +62,14 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
         eyebrow: "PDFin Browser Tools",
         h1: "Manage PDFs directly in your browser.",
         sub: "Use PDF tools without creating an account. For tools that support local processing, documents are processed on your device and are not sent to PDFin processing servers.",
-        notice: "PDFin is still in limited early access. Keep your original files before processing documents.",
         explore: "Choose PDF tool",
         feedback: "Send feedback",
-        trustFacts: ["No account for basic tools", "Processing location explained per tool", stageLabel("en")],
+        trustFacts: ["No account for basic tools", "Processing location explained per tool", "Self-hosted API for local networks"],
         privacyLink: "Read Privacy & Security",
+        selfHostedTitle: "Need an API for internal apps?",
+        selfHostedBody: "PDFin Self-hosted runs PDF processing in your infrastructure and provides an API for internal workflows, automation, and application integration.",
+        selfHostedStatus: "Runs on your local network",
+        selfHostedCta: "Explore Self-hosted",
         categories: {
           pages: "Manage pages",
           conversion: "Conversion and optimization",
@@ -88,7 +93,7 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
         ],
       };
   const strings = PDFIN_T[lang];
-  const trustKeys = ["account", "local", "limited"];
+  const trustKeys = ["account", "local", "selfHosted"];
 
   return (
     <main id="home-main" tabIndex={-1}>
@@ -101,7 +106,6 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
             </span>
             <h1 style={{ font: "var(--type-display)", letterSpacing: "var(--tracking-tight)", maxWidth: 720 }}>{t.h1}</h1>
             <p style={{ font: "var(--type-body)", color: "var(--text-body)", maxWidth: 680, margin: 0 }}>{t.sub}</p>
-            <p style={{ margin: 0, padding: "10px 12px", width: "fit-content", border: "1px solid var(--status-warning-border)", borderRadius: "var(--radius-md)", background: "var(--status-warning-bg)", color: "var(--status-warning-fg)", font: "var(--type-body-sm)" }}>{t.notice}</p>
           </div>
           <div className="home-hero__actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <a href="#tool-categories" style={{
@@ -164,6 +168,30 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
               </div>
             </section>
           ))}
+        </div>
+      </section>
+
+      <section style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-page)" }}>
+        <div style={{ maxWidth: "var(--container-max)", margin: "0 auto", padding: "10px clamp(16px, 5vw, 32px) 36px" }}>
+          <article style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 18,
+            padding: 20, border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)",
+            background: "var(--surface-card)", boxShadow: "var(--shadow-card)",
+          }}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <span style={{ width: "fit-content", display: "inline-flex", alignItems: "center", gap: 8, minHeight: 30, padding: "0 10px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border-default)", background: "var(--surface-sunken)", color: "var(--text-muted)", font: "var(--type-caption)" }}>
+                {Icons.server(16)}
+                {t.selfHostedStatus}
+              </span>
+              <h2 style={{ margin: 0, font: "var(--type-h3)" }}>{t.selfHostedTitle}</h2>
+              <p style={{ margin: 0, maxWidth: 760, font: "var(--type-body-sm)", color: "var(--text-body)" }}>{t.selfHostedBody}</p>
+            </div>
+            <a href={getSelfHostedHref()} style={{
+              display: "inline-flex", minHeight: 44, alignItems: "center", justifyContent: "center", padding: "0 16px",
+              borderRadius: "var(--radius-md)", background: "var(--action-primary)", color: "var(--color-accent-contrast)",
+              font: "var(--type-label)", textDecoration: "none", whiteSpace: "nowrap",
+            }}>{t.selfHostedCta}</a>
+          </article>
         </div>
       </section>
 

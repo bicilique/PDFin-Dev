@@ -5,6 +5,7 @@ import {
   getIndexableSeoPages,
   homeSeoPage,
   seoPages,
+  selfHostedSeoPage,
   SITE_BASE_PATH,
   SITE_URL,
 } from "../src/seo/seoPages.js";
@@ -79,7 +80,7 @@ function renderHomePage(basePath) {
   return `
       <main class="seo-page">
         <section class="seo-hero">
-          <p class="seo-pill">Akses awal terbatas</p>
+          <p class="seo-pill">PDFin Browser Tools</p>
           <h1>${escapeHtml(homeSeoPage.h1)}</h1>
           <p>${escapeHtml(homeSeoPage.intro)}</p>
           <a class="seo-primary" href="${joinUrlPath(basePath, "merge")}">Mulai dengan Gabung PDF</a>
@@ -163,10 +164,35 @@ function renderPrivacyPage(basePath) {
           <span>Privasi & keamanan</span>
         </nav>
         <section class="seo-hero">
-          <p class="seo-pill">Akses awal terbatas</p>
+          <p class="seo-pill">Privacy & Security</p>
           <h1>Privasi & keamanan</h1>
           <p>Untuk alat browser yang telah diverifikasi, dokumen diproses di perangkat Anda dan tidak dikirim ke server pemrosesan PDFin. Browser tetap dapat mengunduh runtime asset yang dibutuhkan.</p>
           <a class="seo-primary" href="${joinUrlPath(basePath, "merge")}">Pilih alat PDF</a>
+        </section>
+      </main>`;
+}
+
+function renderSelfHostedPage(basePath) {
+  return `
+      <main class="seo-page">
+        <nav class="seo-breadcrumb" aria-label="Breadcrumb">
+          <a href="${joinUrlPath(basePath)}">PDFin</a>
+          <span aria-hidden="true">/</span>
+          <span>Self-hosted</span>
+        </nav>
+        <section class="seo-hero">
+          <p class="seo-pill">Self-hosted API</p>
+          <h1>${escapeHtml(selfHostedSeoPage.h1)}</h1>
+          <p>${escapeHtml(selfHostedSeoPage.intro)}</p>
+          <a class="seo-primary" href="mailto:afiffaizianur@gmail.com?subject=PDFin%20Self-hosted%20deployment%20discussion">Diskusikan deployment</a>
+        </section>
+        <section class="seo-section" aria-labelledby="self-hosted-how">
+          <h2 id="self-hosted-how">Cara kerja</h2>
+          <p>Aplikasi pelanggan mengirim request ke PDFin Self-hosted API melalui local network. Processing service berjalan di infrastruktur pelanggan, memakai temporary storage yang dikelola pelanggan, lalu mengembalikan hasil ke aplikasi.</p>
+        </section>
+        <section class="seo-section" aria-labelledby="self-hosted-api">
+          <h2 id="self-hosted-api">API sebagai bagian dari Self-hosted</h2>
+          <p>API bukan produk cloud terpisah. Capability mengikuti operasi yang benar-benar dibangun, diuji, dan disepakati dalam scope deployment.</p>
         </section>
       </main>`;
 }
@@ -250,7 +276,7 @@ function renderPageHtml(templateHtml, page, rootHtml, { includeClientScript }) {
 }
 
 function renderSitemap() {
-  const urls = [homeSeoPage, ...getIndexableSeoPages()]
+  const urls = [homeSeoPage, selfHostedSeoPage, ...getIndexableSeoPages()]
     .map((page) => `  <url><loc>${getCanonicalUrl(page)}</loc></url>`)
     .join("\n");
 
@@ -281,6 +307,11 @@ export async function prerenderSeoPages() {
   await mkdir(privacyDir, { recursive: true });
   const privacyHtml = renderPageHtml(templateHtml, privacySeoPage, renderPrivacyPage(basePath), { includeClientScript: true });
   await writeFile(join(privacyDir, "index.html"), privacyHtml);
+
+  const selfHostedDir = join(distDir, selfHostedSeoPage.slug);
+  await mkdir(selfHostedDir, { recursive: true });
+  const selfHostedHtml = renderPageHtml(templateHtml, selfHostedSeoPage, renderSelfHostedPage(basePath), { includeClientScript: true });
+  await writeFile(join(selfHostedDir, "index.html"), selfHostedHtml);
 
   await writeFile(join(distDir, "sitemap.xml"), renderSitemap());
   await writeFile(join(distDir, "robots.txt"), renderRobots());

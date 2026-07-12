@@ -2,15 +2,14 @@ import React from "react";
 import { Header, Footer } from "./Chrome.jsx";
 import { HomeScreen } from "../features/home/HomeScreen.jsx";
 import { PrivacySecurityPage } from "../features/privacy/PrivacySecurityPage.jsx";
-import { SelfHostedDraftPage } from "../features/selfHosted/SelfHostedDraftPage.jsx";
+import { SelfHostedPage } from "../features/selfHosted/SelfHostedPage.jsx";
 import { WorkspaceApp } from "../features/workspace/WorkspaceApp.jsx";
-import { RELEASE_CONFIG } from "./releaseConfig.js";
 import { DEFAULT_TOOL_ID, getToolFromHash, getToolFromPath, getToolHref, isPrivacyRoute, isSelfHostedRoute, isWorkspaceRoute } from "./toolRoutes.js";
 import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "./theme.js";
 
 function getInitialScreen() {
   if (isPrivacyRoute()) return "privacy";
-  if (isSelfHostedRoute() && RELEASE_CONFIG.enableSelfHostedPage) return "self-hosted";
+  if (isSelfHostedRoute()) return "self-hosted";
   return isWorkspaceRoute() ? "workspace" : "home";
 }
 
@@ -66,12 +65,12 @@ export function App() {
 
   const openSelfHosted = () => {
     window.history.pushState(null, "", `${import.meta.env.BASE_URL}self-hosted/`);
-    setScreen(RELEASE_CONFIG.enableSelfHostedPage ? "self-hosted" : "home");
+    setScreen("self-hosted");
   };
 
   const focusHomeMain = (event) => {
     event.preventDefault();
-    const target = document.getElementById(screen === "privacy" ? "privacy-main" : "home-main");
+    const target = document.getElementById(screen === "privacy" ? "privacy-main" : screen === "self-hosted" ? "self-hosted-main" : "home-main");
     if (target) target.focus();
   };
 
@@ -82,14 +81,16 @@ export function App() {
   const content = screen === "privacy"
     ? <PrivacySecurityPage lang={lang} />
     : screen === "self-hosted"
-      ? <SelfHostedDraftPage lang={lang} />
+      ? <SelfHostedPage lang={lang} />
       : <HomeScreen lang={lang} onOpenWorkspace={openWorkspace} />;
 
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "var(--surface-page)" }}>
-      <a className="skip-link" href={screen === "privacy" ? "#privacy-main" : "#home-main"} onClick={focusHomeMain}>
+      <a className="skip-link" href={screen === "privacy" ? "#privacy-main" : screen === "self-hosted" ? "#self-hosted-main" : "#home-main"} onClick={focusHomeMain}>
         {screen === "privacy"
           ? (lang === "id" ? "Lewati ke konten privasi" : "Skip to privacy content")
+          : screen === "self-hosted"
+            ? (lang === "id" ? "Lewati ke konten Self-hosted" : "Skip to Self-hosted content")
           : (lang === "id" ? "Lewati ke katalog alat" : "Skip to tool catalog")}
       </a>
       <Header

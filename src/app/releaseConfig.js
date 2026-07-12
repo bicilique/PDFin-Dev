@@ -17,7 +17,7 @@ function readBoolean(name, fallback = false) {
 export const RELEASE_CONFIG = {
   appStage: readEnv("VITE_APP_STAGE", "limited_access"),
   enablePublicIndexing: readBoolean("VITE_ENABLE_PUBLIC_INDEXING", false),
-  enableSelfHostedPage: readBoolean("VITE_ENABLE_SELF_HOSTED_PAGE", false),
+  enableSelfHostedPage: readBoolean("VITE_ENABLE_SELF_HOSTED_PAGE", true),
   enableSelfHostedInquiry: readBoolean("VITE_ENABLE_SELF_HOSTED_INQUIRY", false),
   enableExperimentalTools: readBoolean("VITE_ENABLE_EXPERIMENTAL_TOOLS", false),
   enableProductAnalytics: readBoolean("VITE_ENABLE_PRODUCT_ANALYTICS", false),
@@ -27,5 +27,5 @@ export const RELEASE_CONFIG = {
 export function stageLabel(lang = "id") {
   if (RELEASE_CONFIG.appStage === "public_beta") return "Public Beta";
   if (RELEASE_CONFIG.appStage === "public") return lang === "id" ? "Publik" : "Public";
-  return lang === "id" ? "Akses awal terbatas" : "Limited early access";
+  return lang === "id" ? "Browser Tools" : "Browser Tools";
 }

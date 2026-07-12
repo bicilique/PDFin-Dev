@@ -189,7 +189,16 @@ export const homeSeoPage = {
   title: "PDFin | Kelola PDF langsung di browser",
   h1: "Kelola PDF langsung di browser",
   description: "PDFin Browser Tools membantu mengelola PDF tanpa akun. Untuk alat yang mendukung pemrosesan lokal, dokumen diproses di perangkat Anda.",
-  intro: "PDFin masih dalam akses awal terbatas. Pilih alat PDF, simpan file asli, dan baca batasan privasi sebelum memproses dokumen penting.",
+  intro: "Pilih alat PDF untuk pekerjaan browser, atau gunakan PDFin Self-hosted saat aplikasi internal membutuhkan API di infrastruktur sendiri.",
+  indexable: true,
+};
+
+export const selfHostedSeoPage = {
+  slug: "self-hosted",
+  title: "PDFin Self-hosted | API pemrosesan PDF di local network",
+  h1: "Pemrosesan PDF di local network Anda",
+  description: "Jalankan PDFin Self-hosted di server, private cloud, atau local network Anda dan integrasikan pemrosesan PDF melalui API.",
+  intro: "PDFin Self-hosted menjalankan processing service dan API di infrastruktur yang Anda kelola. API bukan layanan cloud PDFin dan dokumen tidak dikirim ke hosted processing PDFin untuk processing normal.",
   indexable: true,
 };
 

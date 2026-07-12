@@ -34,19 +34,18 @@ describe("App tool routing", () => {
     expect(screen.getAllByText(/dokumen diproses di perangkat anda/i).length).toBeGreaterThan(0);
   });
 
-  it("renders the limited-access home catalog with deterministic workspace links", () => {
+  it("renders the home catalog with deterministic workspace and self-hosted links", () => {
     window.history.replaceState(null, "", "/");
 
     render(<App />);
 
     expect(screen.getByRole("heading", { name: /kelola pdf langsung di browser/i })).toBeInTheDocument();
-    expect(screen.getByText(/untuk alat yang mendukung pemrosesan lokal/i)).toBeInTheDocument();
-    expect(screen.getByText(/simpan file asli/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/untuk alat yang mendukung pemrosesan lokal/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /pilih alat pdf/i })).toHaveAttribute("href", "#tool-categories");
     expect(screen.getAllByRole("link", { name: /kirim masukan/i })[0]).toHaveAttribute("href", expect.stringMatching(/^mailto:/));
     expect(screen.getByText(/tanpa akun untuk fungsi dasar/i)).toBeInTheDocument();
     expect(screen.getByText(/processing location dijelaskan per tool/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/akses awal terbatas/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/self-hosted api untuk local network/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /baca privacy & security/i })).toHaveAttribute("href", "/privacy-security/");
     expect(screen.getByRole("heading", { name: /kelola halaman/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /konversi dan optimasi/i })).toBeInTheDocument();
@@ -60,7 +59,8 @@ describe("App tool routing", () => {
     expect(screen.getAllByText(/dalam pengembangan/i).some((node) => node.tagName.toLowerCase() === "span")).toBe(true);
     expect(screen.getByRole("heading", { name: /batasan yang perlu diketahui/i })).toBeInTheDocument();
     expect(screen.getByText(/recent filename tidak disimpan/i)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /hubungi untuk self-hosting/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /memerlukan api untuk aplikasi internal/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /pelajari self-hosted/i })).toHaveAttribute("href", "/self-hosted/");
     expect(screen.queryByRole("link", { name: /workspace alat/i })).not.toBeInTheDocument();
     expect(document.querySelectorAll('main a[href="#"]')).toHaveLength(0);
     expect(document.querySelectorAll('a[href="#"]')).toHaveLength(0);
@@ -87,6 +87,7 @@ describe("App tool routing", () => {
     expect(header.getByRole("link", { name: /semua alat/i })).toHaveAttribute("aria-current", "page");
     expect(header.getByRole("link", { name: /ruang kerja/i })).toBeInTheDocument();
     expect(header.getByRole("link", { name: /privasi & keamanan/i })).toHaveAttribute("href", "/privacy-security/");
+    expect(header.getByRole("link", { name: /self-hosted/i })).toHaveAttribute("href", "/self-hosted/");
     expect(screen.getByRole("button", { name: /beralih ke mode gelap/i })).toHaveAttribute("aria-pressed", "false");
 
     cleanup();
@@ -102,13 +103,13 @@ describe("App tool routing", () => {
 
     render(<App />);
 
-    expect(screen.getByText(/browser tools berada dalam akses awal terbatas/i)).toBeInTheDocument();
+    expect(screen.getByText(/self-hosted menjalankan api di infrastruktur anda/i)).toBeInTheDocument();
     expect(screen.getByRole("contentinfo").querySelectorAll("[aria-disabled='true']")).toHaveLength(0);
     const footer = within(screen.getByRole("contentinfo"));
     expect(footer.getByRole("link", { name: /privasi & keamanan/i })).toHaveAttribute("href", "/privacy-security/");
     expect(footer.getByRole("link", { name: /^github$/i })).toHaveAttribute("href", "https://github.com/bicilique");
     expect(footer.getByRole("link", { name: /kirim masukan/i })).toHaveAttribute("href", expect.stringMatching(/^mailto:/));
-    expect(footer.queryByRole("link", { name: /self-hosted/i })).not.toBeInTheDocument();
+    expect(footer.getByRole("link", { name: /self-hosted/i })).toHaveAttribute("href", "/self-hosted/");
     expect(footer.getByRole("link", { name: /afiffaizianur@gmail.com/i })).toHaveAttribute("href", "mailto:afiffaizianur@gmail.com");
     expect(screen.queryByText(/syarat & ketentuan/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/aplikasi desktop/i)).not.toBeInTheDocument();
@@ -132,11 +133,24 @@ describe("App tool routing", () => {
 
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /privasi & keamanan/i })).toBeInTheDocument();
-    expect(screen.getByText(/browser tetap mengunduh runtime asset/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /matrix pemrosesan browser tools/i })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "OCR PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /lokasi pemrosesan dokumen dibuat jelas/i })).toBeInTheDocument();
+    expect(screen.getByText(/browser tetap dapat mengunduh runtime asset/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /matrix pemrosesan browser tools/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /self-hosted/i })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /kirim masukan/i })[0]).toHaveAttribute("href", expect.stringMatching(/^mailto:/));
+  });
+
+  it("renders the self-hosted service page directly", () => {
+    window.history.replaceState(null, "", "/self-hosted/");
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /pemrosesan pdf di local network anda/i })).toBeInTheDocument();
+    expect(screen.getByText(/api tersedia sebagai bagian dari pdfin self-hosted/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /diskusikan deployment/i })[0]).toHaveAttribute("href", expect.stringMatching(/^mailto:/));
+    expect(screen.getByRole("heading", { name: /cara kerja/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /capability awal/i })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: /ocr pdf/i })).toBeInTheDocument();
   });
 
   it("uses a persisted dark theme before the workspace and home screens share it", async () => {

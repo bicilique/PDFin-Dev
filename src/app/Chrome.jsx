@@ -1,6 +1,5 @@
 import React from "react";
 import { IconButton, Icons, LangSwitcher, MobileDrawer } from "../components/index.js";
-import { RELEASE_CONFIG, stageLabel } from "./releaseConfig.js";
 import { DEFAULT_TOOL_ID, getPrivacyHref, getSelfHostedHref, getToolHref } from "./toolRoutes.js";
 
 export function PdfinLogo({ dark = false }) {
@@ -24,13 +23,13 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
         { key: "home", label: "Semua alat", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Ruang kerja", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
         { key: "privacy", label: "Privasi & keamanan", href: getPrivacyHref(), action: onPrivacy },
-        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
+        { key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted },
       ]
     : [
         { key: "home", label: "All tools", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
         { key: "privacy", label: "Privacy & security", href: getPrivacyHref(), action: onPrivacy },
-        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
+        { key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted },
       ];
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   return (
@@ -41,9 +40,6 @@ export function Header({ lang, setLang, theme, setTheme, current = "home", onHom
       position: "sticky", top: 0, zIndex: 10,
     }}>
       <a className="app-header__logo" href={import.meta.env.BASE_URL} onClick={(e) => { e.preventDefault(); onHome(); }} style={{ textDecoration: "none" }}><PdfinLogo /></a>
-      <span style={{ display: "inline-flex", alignItems: "center", minHeight: 26, padding: "0 9px", borderRadius: "var(--radius-pill)", border: "1px solid var(--privacy-border)", background: "var(--privacy-bg)", color: "var(--privacy-fg)", font: "var(--type-caption)" }}>
-        {stageLabel(lang)}
-      </span>
       <nav className="app-header__nav" style={{ display: "flex", gap: 4, flex: "1 1 180px", minWidth: 0, flexWrap: "wrap" }}>
         {nav.map((n) => {
           const active = current === n.key;
@@ -112,13 +108,13 @@ export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, on
         { key: "home", label: "Semua alat", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Ruang kerja", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
         { key: "privacy", label: "Privasi & keamanan", href: getPrivacyHref(), action: onPrivacy },
-        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
+        { key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted },
       ]
     : [
         { key: "home", label: "All tools", href: import.meta.env.BASE_URL, action: onHome },
         { key: "workspace", label: "Workspace", href: getToolHref(DEFAULT_TOOL_ID), action: onWorkspace },
         { key: "privacy", label: "Privacy & security", href: getPrivacyHref(), action: onPrivacy },
-        ...(RELEASE_CONFIG.enableSelfHostedPage ? [{ key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted }] : []),
+        { key: "self-hosted", label: "Self-hosted", href: getSelfHostedHref(), action: onSelfHosted },
       ];
   const linkStyle = ({ active = false } = {}) => ({
     minHeight: 48,
@@ -153,7 +149,7 @@ export function MobileNavigationDrawer({ open, onClose, lang, setLang, theme, on
           </a>
         ))}
         <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" style={{ ...linkStyle(), gap: 8 }} onClick={onClose}>{Icons.github(18)}GitHub</a>
-        <a href="mailto:afiffaizianur@gmail.com?subject=PDFin%20early%20access%20feedback" style={linkStyle()} onClick={onClose}>{lang === "id" ? "Kirim masukan" : "Send feedback"}</a>
+        <a href="mailto:afiffaizianur@gmail.com?subject=PDFin%20feedback" style={linkStyle()} onClick={onClose}>{lang === "id" ? "Kirim masukan" : "Send feedback"}</a>
       </nav>
       <div className="mobile-drawer__section">
         <span className="mobile-drawer__label">{lang === "id" ? "Bahasa" : "Language"}</span>
@@ -173,14 +169,14 @@ export function Footer({ lang, onPrivacy, onSelfHosted }) {
         github: "GitHub",
         feedback: "Kirim masukan",
         selfHosting: "Self-hosted",
-        note: "PDFin Browser Tools berada dalam akses awal terbatas. Untuk alat yang telah diverifikasi, dokumen diproses di browser Anda dan tidak dikirim ke server pemrosesan PDFin.",
+        note: "PDFin Browser Tools memproses dokumen di browser untuk alat yang mendukung pemrosesan lokal. PDFin Self-hosted menjalankan API di infrastruktur Anda.",
       }
     : {
         privacy: "Privacy & security",
         github: "GitHub",
         feedback: "Send feedback",
         selfHosting: "Self-hosted",
-        note: "PDFin Browser Tools are in limited early access. For verified tools, documents are processed in your browser and are not sent to PDFin processing servers.",
+        note: "PDFin Browser Tools process documents in the browser where local processing is supported. PDFin Self-hosted runs the API in your infrastructure.",
       };
   const linkStyle = { font: "var(--type-caption)", color: "var(--text-link)" };
   const iconLinkStyle = { ...linkStyle, display: "inline-flex", alignItems: "center", gap: 6 };
@@ -190,8 +186,8 @@ export function Footer({ lang, onPrivacy, onSelfHosted }) {
       <span style={{ font: "var(--type-caption)", color: "var(--text-muted)", flex: 1 }}>{t.note}</span>
       <a href={getPrivacyHref()} onClick={(event) => { if (onPrivacy) { event.preventDefault(); onPrivacy(); } }} style={linkStyle}>{t.privacy}</a>
       <a href="https://github.com/bicilique" target="_blank" rel="noreferrer" style={iconLinkStyle}>{Icons.github(16)}{t.github}</a>
-      {RELEASE_CONFIG.enableSelfHostedPage && <a href={getSelfHostedHref()} onClick={(event) => { if (onSelfHosted) { event.preventDefault(); onSelfHosted(); } }} style={linkStyle}>{t.selfHosting}</a>}
-      <a href="mailto:afiffaizianur@gmail.com?subject=PDFin%20early%20access%20feedback" style={linkStyle}>{t.feedback}</a>
+      <a href={getSelfHostedHref()} onClick={(event) => { if (onSelfHosted) { event.preventDefault(); onSelfHosted(); } }} style={linkStyle}>{t.selfHosting}</a>
+      <a href="mailto:afiffaizianur@gmail.com?subject=PDFin%20feedback" style={linkStyle}>{t.feedback}</a>
       <a href="mailto:afiffaizianur@gmail.com" style={linkStyle}>afiffaizianur@gmail.com</a>
     </footer>
   );

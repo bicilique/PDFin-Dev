@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PROTOTYPE_TOOL_IDS, WORKSPACE_TOOL_IDS } from "../features/workspace/toolCatalog.js";
-import { getIndexableSeoPages, homeSeoPage, seoPages, SITE_BASE_PATH, SITE_URL } from "./seoPages.js";
+import { getIndexableSeoPages, homeSeoPage, selfHostedSeoPage, seoPages, SITE_BASE_PATH, SITE_URL } from "./seoPages.js";
 
 describe("SEO page catalog", () => {
   it("defines one SEO page for every workspace tool", () => {
@@ -56,10 +56,13 @@ describe("SEO page catalog", () => {
     expect(homeSeoPage.indexable).toBe(true);
     expect(homeSeoPage.h1).toBe("Kelola PDF langsung di browser");
     expect(homeSeoPage.description).toMatch(/browser tools/i);
+    expect(selfHostedSeoPage.indexable).toBe(true);
+    expect(selfHostedSeoPage.slug).toBe("self-hosted");
+    expect(selfHostedSeoPage.description).toMatch(/local network/i);
   });
 
   it("has complete metadata for every static page", () => {
-    for (const page of [homeSeoPage, ...seoPages]) {
+    for (const page of [homeSeoPage, selfHostedSeoPage, ...seoPages]) {
       expect(page.title.length).toBeGreaterThan(10);
       expect(page.description.length).toBeGreaterThan(40);
       expect(page.h1.length).toBeGreaterThan(5);

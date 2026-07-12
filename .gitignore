@@ -146,6 +146,7 @@ vite.config.ts.timestamp-*
 
 .serena
 .codex
+.worktrees/
 graphify-out
 docs/
 output/

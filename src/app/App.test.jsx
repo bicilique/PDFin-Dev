@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.jsx";
+import { SelfHostedPage } from "../features/selfHosted/SelfHostedPage.jsx";
 
 describe("App tool routing", () => {
   afterEach(() => {
@@ -151,6 +152,25 @@ describe("App tool routing", () => {
     expect(screen.getByRole("heading", { name: /cara kerja/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /capability awal/i })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: /ocr pdf/i })).toBeInTheDocument();
+  });
+
+  it("explains the customer-managed local network processing flow", () => {
+    window.history.replaceState(null, "", "/self-hosted/");
+
+    render(<App />);
+
+    expect(screen.getByRole("region", { name: /alur pemrosesan di infrastruktur pelanggan/i })).toBeInTheDocument();
+    expect(screen.getByText(/request pdf \+ opsi/i)).toBeInTheDocument();
+    expect(screen.getByText(/hasil pemrosesan/i)).toBeInTheDocument();
+    expect(screen.getByText(/temporary customer-managed storage/i)).toBeInTheDocument();
+  });
+
+  it("provides an English equivalent for the self-hosted processing flow", () => {
+    render(<SelfHostedPage lang="en" />);
+
+    expect(screen.getByRole("region", { name: /processing flow in customer-managed infrastructure/i })).toBeInTheDocument();
+    expect(screen.getByText(/pdf request \+ options/i)).toBeInTheDocument();
+    expect(screen.getByText(/processed result/i)).toBeInTheDocument();
   });
 
   it("uses a persisted dark theme before the workspace and home screens share it", async () => {

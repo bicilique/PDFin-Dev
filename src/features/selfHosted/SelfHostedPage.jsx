@@ -1,4 +1,5 @@
 import { Icons } from "../../components/index.js";
+import { SelfHostedFlowDiagram } from "./SelfHostedFlowDiagram.jsx";
 
 const capabilities = [
   ["Merge PDF", "API candidate", "Async job", "Candidate"],
@@ -28,6 +29,26 @@ function copy(lang) {
         statusBody: "API tersedia sebagai bagian dari PDFin Self-hosted. Ini bukan PDFin Cloud API dan tidak menggunakan hosted processing milik PDFin.",
         howTitle: "Cara kerja",
         howBody: "Aplikasi internal Anda mengirim request ke PDFin Self-hosted API melalui local network. Service memproses job, memakai temporary storage yang dikelola pelanggan, lalu mengembalikan hasil ke aplikasi.",
+        flow: {
+          ariaLabel: "Alur pemrosesan di infrastruktur pelanggan",
+          boundary: "Infrastruktur pelanggan",
+          application: "Aplikasi internal",
+          applicationDetail: "Workflow atau sistem Anda",
+          request: "Request PDF + opsi",
+          network: "Local network",
+          networkDetail: "Jalur internal pelanggan",
+          toApi: "Request API",
+          api: "PDFin Self-hosted API",
+          apiDetail: "Endpoint pada deployment Anda",
+          toEngine: "Diproses sebagai job",
+          engine: "Processing engine",
+          engineDetail: "Memproses job PDF",
+          storage: "Temporary customer-managed storage",
+          storageDetail: "Penyimpanan sementara",
+          result: "Hasil pemrosesan",
+          resultDetail: "Dikembalikan ke aplikasi internal",
+          summary: "Diagram ini menjelaskan alur pemrosesan normal di lingkungan pelanggan.",
+        },
         apiTitle: "API untuk workflow internal",
         apiBody: "Self-hosted dirancang untuk automation, batch processing, dan integrasi system-to-system. Capability API mengikuti operasi yang benar-benar dibangun, diuji, dan disepakati dalam scope deployment.",
         deploymentTitle: "Deployment",
@@ -58,6 +79,26 @@ function copy(lang) {
         statusBody: "The API is part of PDFin Self-hosted. It is not a PDFin Cloud API and does not use PDFin-hosted processing.",
         howTitle: "How it works",
         howBody: "Your internal application sends requests to the PDFin Self-hosted API over the local network. The service processes the job, uses customer-managed temporary storage, then returns the result to the application.",
+        flow: {
+          ariaLabel: "Processing flow in customer-managed infrastructure",
+          boundary: "Customer-managed infrastructure",
+          application: "Internal application",
+          applicationDetail: "Your workflow or system",
+          request: "PDF request + options",
+          network: "Local network",
+          networkDetail: "Customer internal path",
+          toApi: "API request",
+          api: "PDFin Self-hosted API",
+          apiDetail: "Endpoint in your deployment",
+          toEngine: "Processed as a job",
+          engine: "Processing engine",
+          engineDetail: "Processes the PDF job",
+          storage: "Temporary customer-managed storage",
+          storageDetail: "Temporary storage",
+          result: "Processed result",
+          resultDetail: "Returned to the internal application",
+          summary: "This diagram describes the normal processing flow in the customer environment.",
+        },
         apiTitle: "API for internal workflows",
         apiBody: "Self-hosted is designed for automation, batch processing, and system-to-system integration. API capability follows operations that are built, tested, and agreed within the deployment scope.",
         deploymentTitle: "Deployment",
@@ -82,7 +123,6 @@ function copy(lang) {
 
 export function SelfHostedPage({ lang = "id" }) {
   const t = copy(lang);
-  const flow = ["Customer application", "Local network", "PDFin Self-hosted API", "Processing engine", "Temporary customer-managed storage", "Result returned"];
 
   return (
     <main id="self-hosted-main" tabIndex={-1} style={{ background: "var(--surface-page)" }}>
@@ -113,14 +153,7 @@ export function SelfHostedPage({ lang = "id" }) {
           <h2 style={{ margin: 0, font: "var(--type-h2)" }}>{t.howTitle}</h2>
           <p style={{ margin: 0, font: "var(--type-body-sm)", color: "var(--text-body)" }}>{t.howBody}</p>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
-          {flow.map((item, index) => (
-            <article key={item} style={{ minHeight: 104, padding: 14, border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", background: "var(--surface-card)", display: "grid", gap: 10 }}>
-              <span style={{ width: 28, height: 28, display: "inline-grid", placeItems: "center", borderRadius: "var(--radius-pill)", background: "var(--surface-brand-subtle)", color: "var(--text-brand)", font: "var(--type-caption)" }}>{index + 1}</span>
-              <strong style={{ font: "var(--type-label)", color: "var(--text-heading)" }}>{item}</strong>
-            </article>
-          ))}
-        </div>
+        <SelfHostedFlowDiagram flow={t.flow} />
       </section>
 
       <section style={{ maxWidth: "var(--container-max)", margin: "0 auto", padding: "0 clamp(16px, 5vw, 32px) 38px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>

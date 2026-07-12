@@ -1,5 +1,6 @@
 import React from "react";
 import { Badge, Button, IconButton, MobileBottomSheet, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
+import { trackPdfEvent } from "../../app/analytics.js";
 import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "../../app/theme.js";
 import { getToolFromHash, getToolFromPath, getToolHref } from "../../app/toolRoutes.js";
 import { PDFIN_T } from "./i18n.js";
@@ -32,6 +33,24 @@ function createPageInstance(data) {
 }
 
 const pageIdentity = (page) => page.pageInstanceId || page.uid;
+const countPages = (items = []) => items.reduce((sum, item) => sum + (Number(item.pageCount ?? item.pages) || 0), 0);
+
+function workspaceAnalyticsPayload(tool, files = [], pages = [], extras = {}) {
+  return {
+    tool,
+    file_count: files.length,
+    page_count: pages.length || countPages(files),
+    ...extras,
+  };
+}
+
+function processErrorCategory(tool, error) {
+  if (tool === "protect") return "protect_failed";
+  const message = String(error?.message || error || "").toLowerCase();
+  if (message.includes("password") || message.includes("encrypted")) return "encrypted_or_password";
+  if (message.includes("abort")) return "aborted";
+  return "processing_failed";
+}
 
 function hashTool() {
   return getToolFromPath() || getToolFromHash() || "merge";
@@ -155,6 +174,10 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   }, []);
 
   React.useEffect(() => {
+    trackPdfEvent("pdf_tool_opened", { tool });
+  }, [tool]);
+
+  React.useEffect(() => {
     const onRoute = () => switchTool(hashTool(), false);
     window.addEventListener("hashchange", onRoute);
     window.addEventListener("popstate", onRoute);
@@ -215,7 +238,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     setErrMsg("");
 
     const seen = new Set((def.multiFile ? files : []).map((f) => f.fingerprint).filter(Boolean));
-    let addedReady = false;
+    const readyBatch = [];
 
     for (const file of incoming) {
       const fingerprint = await fileFingerprint(file);
@@ -252,6 +275,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
           status: "ready",
           error: "",
         };
+        readyBatch.push(readyRecord);
         setFiles((prev) => prev.map((f) => (f.id === pendingId ? readyRecord : f)));
         setPages((prev) => {
           const kept = def.multiFile ? prev : [];
@@ -267,7 +291,6 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
           }
           return [...kept, ...extra];
         });
-        addedReady = true;
       } catch (e) {
         console.warn(e);
         const message = classifyFileError(e, lang);
@@ -276,7 +299,12 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
       }
     }
 
-    if (addedReady) {
+    if (readyBatch.length) {
+      trackPdfEvent("pdf_file_selected", {
+        tool,
+        file_count: readyBatch.length,
+        page_count: countPages(readyBatch),
+      });
       const toolIds = [tool, ...recent.filter((id) => id !== tool)].slice(0, 6);
       setRecent(toolIds);
       localStorage.setItem("pdfin-ws-recent-tools", JSON.stringify(toolIds));
@@ -433,6 +461,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     cancelled.current = false;
     const abortController = new AbortController();
     processingAbortRef.current = abortController;
+    trackPdfEvent("pdf_process_started", workspaceAnalyticsPayload(tool, validFiles, pages));
     setStage("processing"); setProgress(0);
     setProcLabel(def.processLabel ? def.processLabel(t, lang) : t.stage.processing);
     const t0 = performance.now();
@@ -443,7 +472,12 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
       }, lang);
       if (cancelled.current) return;
       if (def.afterProcessOpts) setOpts((current) => def.afterProcessOpts(current, res));
-      setResult({ ...res, ms: performance.now() - t0 });
+      const durationMs = performance.now() - t0;
+      setResult({ ...res, ms: durationMs });
+      trackPdfEvent("pdf_process_completed", workspaceAnalyticsPayload(tool, validFiles, pages, {
+        output_count: res.outputs?.length || 0,
+        duration_ms: durationMs,
+      }));
       setStage("done");
     } catch (e) {
       if (tool !== "protect") console.warn(e);
@@ -452,6 +486,9 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
           ? (lang === "id" ? "PDF tidak dapat dikunci. Pastikan file valid, belum dilindungi password, dan coba lagi." : "The PDF could not be protected. Make sure it is valid, not already password-protected, and try again.")
           : "";
         setErrMsg(message);
+        trackPdfEvent("pdf_process_failed", workspaceAnalyticsPayload(tool, validFiles, pages, {
+          error_category: processErrorCategory(tool, e),
+        }));
         setStage("error");
       }
     } finally {
@@ -464,11 +501,16 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     cancelled.current = true;
     processingRef.current = false;
     processingAbortRef.current?.abort();
+    trackPdfEvent("pdf_process_cancelled", workspaceAnalyticsPayload(tool, validFiles, pages));
     if (def.sanitizeAfterProcess) setOpts((current) => def.sanitizeAfterProcess(current));
     setStage(files.length ? "ready" : "empty");
   };
 
   const download = (o) => {
+    trackPdfEvent("pdf_download_clicked", workspaceAnalyticsPayload(tool, validFiles, pages, {
+      output_count: 1,
+      page_count: Number(o.pages) || pages.length || countPages(validFiles),
+    }));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(o.blob);
     a.download = o.name;

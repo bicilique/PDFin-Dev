@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceApp } from "./WorkspaceApp.jsx";
 import { PdfEngine } from "./engine/pdfEngine.js";
 import { PdfProcess } from "./engine/pdfProcess.js";
+import { trackPdfEvent } from "../../app/analytics.js";
 
 function setViewportWidth(width) {
   window.innerWidth = width;
@@ -178,6 +179,10 @@ vi.mock("./engine/pdfProcess.js", () => ({
   },
 }));
 
+vi.mock("../../app/analytics.js", () => ({
+  trackPdfEvent: vi.fn(),
+}));
+
 async function addMergeFiles() {
   const input = document.querySelector('input[type="file"]');
   fireEvent.change(input, {
@@ -215,6 +220,47 @@ describe("WorkspaceApp canonical runtime", () => {
     vi.clearAllMocks();
     PdfProcess.sourceHasDigitalSignature.mockReturnValue(false);
     PdfProcess.sourceHasEncryption.mockReturnValue(false);
+  });
+
+  it("tracks the core PDF analytics funnel without document identifiers", async () => {
+    window.history.replaceState(null, "", "/#merge");
+    render(<WorkspaceApp />);
+
+    await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("pdf_tool_opened", expect.objectContaining({ tool: "merge" })));
+    trackPdfEvent.mockClear();
+
+    await addMergeFiles();
+
+    await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("pdf_file_selected", expect.objectContaining({
+      tool: "merge",
+      file_count: 2,
+      page_count: 4,
+    })));
+    expect(JSON.stringify(trackPdfEvent.mock.calls)).not.toMatch(/first\.pdf|second\.pdf|pdf-a|pdf-b/i);
+
+    runMerge();
+
+    await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("pdf_process_started", expect.objectContaining({
+      tool: "merge",
+      file_count: 2,
+      page_count: 4,
+    })));
+    await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("pdf_process_completed", expect.objectContaining({
+      tool: "merge",
+      file_count: 2,
+      page_count: 4,
+      output_count: 1,
+      duration_ms: expect.any(Number),
+    })));
+    expect(JSON.stringify(trackPdfEvent.mock.calls)).not.toMatch(/hasil-gabungan|first\.pdf|second\.pdf/i);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^unduh$/i }));
+
+    expect(trackPdfEvent).toHaveBeenCalledWith("pdf_download_clicked", expect.objectContaining({
+      tool: "merge",
+      output_count: 1,
+      page_count: 4,
+    }));
   });
 
   it("shows a disabled tool CTA with a next-action message when requirements are unmet", async () => {

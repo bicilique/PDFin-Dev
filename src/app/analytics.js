@@ -35,8 +35,8 @@ export function createAnalytics({
     initialized = true;
 
     windowRef.dataLayer = windowRef.dataLayer || [];
-    windowRef.gtag = windowRef.gtag || function gtag(...args) {
-      windowRef.dataLayer.push(args);
+    windowRef.gtag = windowRef.gtag || function gtag() {
+      windowRef.dataLayer.push(arguments);
     };
 
     const script = documentRef.createElement("script");

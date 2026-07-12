@@ -154,23 +154,27 @@ describe("App tool routing", () => {
     expect(screen.getByRole("cell", { name: /ocr pdf/i })).toBeInTheDocument();
   });
 
-  it("explains the customer-managed local network processing flow", () => {
+  it("explains the customer-managed processing flow", () => {
     window.history.replaceState(null, "", "/self-hosted/");
 
     render(<App />);
 
-    expect(screen.getByRole("region", { name: /alur pemrosesan di infrastruktur pelanggan/i })).toBeInTheDocument();
-    expect(screen.getByText(/request pdf \+ opsi/i)).toBeInTheDocument();
-    expect(screen.getByText(/hasil pemrosesan/i)).toBeInTheDocument();
-    expect(screen.getByText(/temporary customer-managed storage/i)).toBeInTheDocument();
+    const figure = screen.getByRole("figure", { name: /alur pemrosesan pdfin self-hosted di infrastruktur anda/i });
+    expect(within(figure).getByText(/pdf \+ opsi melalui https/i)).toBeInTheDocument();
+    expect(within(figure).getAllByText(/mesin pemrosesan/i).length).toBeGreaterThan(0);
+    expect(within(figure).getByText(/baca input \/ tulis hasil/i)).toBeInTheDocument();
+    expect(within(figure).getAllByText(/status job dan hasil/i).length).toBeGreaterThan(0);
+    expect(within(figure).getByText(/penyimpanan sementara berlangsung di infrastruktur yang anda kelola/i)).toBeInTheDocument();
+    expect(within(figure).queryByText(/local network/i)).not.toBeInTheDocument();
   });
 
   it("provides an English equivalent for the self-hosted processing flow", () => {
     render(<SelfHostedPage lang="en" />);
 
-    expect(screen.getByRole("region", { name: /processing flow in customer-managed infrastructure/i })).toBeInTheDocument();
-    expect(screen.getByText(/pdf request \+ options/i)).toBeInTheDocument();
-    expect(screen.getByText(/processed result/i)).toBeInTheDocument();
+    expect(screen.getByRole("figure", { name: /pdfin self-hosted processing flow in your infrastructure/i })).toBeInTheDocument();
+    expect(screen.getByText(/pdf \+ options over https/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/job status and result/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/read input \/ write output/i)).toBeInTheDocument();
   });
 
   it("uses a persisted dark theme before the workspace and home screens share it", async () => {

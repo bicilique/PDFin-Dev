@@ -537,7 +537,7 @@ TOOL_DEFS.compress = {
   process: (ctx, opts, onP, lang) => PdfProcess.compress(ctx.pages, opts, TOOL_DEFS.compress.outName(lang, opts), onP),
 };
 
-function OutputNameField({ lang, value, onChange, inputId }) {
+export function OutputNameField({ lang, value, onChange, inputId }) {
   const error = getOutputNameError(value, lang);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

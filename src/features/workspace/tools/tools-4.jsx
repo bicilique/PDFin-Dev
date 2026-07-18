@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Button, Icons, Select, Switch } from "../../../components/index.js";
+import { Alert, Button, IconButton, Icons, Select, Switch, ZoomControl } from "../../../components/index.js";
 import { Field, OutputNameField, Segmented, SliderRow, TX, TOOL_DEFS, getOutputNameError, getPdfOutputName } from "./tools-1.jsx";
 import { MARKDOWN_SAMPLE, markdownStats, parseMarkdown } from "../engine/markdownEngine.js";
 import { markdownToPdf } from "../engine/markdownPdf.js";
@@ -179,28 +179,103 @@ function PreviewBlock({ block }) {
   return null;
 }
 
-function MarkdownPreviewPane({ markdown, lang, baseFontSize }) {
+function MarkdownPage({ blocks, lang, baseFontSize, width = 680 }) {
+  return (
+    <div style={{
+      width, maxWidth: "100%", boxSizing: "border-box", margin: "0 auto", minHeight: "100%", background: "var(--color-pdf-page)",
+      border: "1px solid var(--border-default)", boxShadow: "var(--shadow-card)",
+      borderRadius: 2, padding: "clamp(18px, 5vw, 44px)",
+      font: `${baseFontSize + 3}px/1.6 var(--font-sans)`, color: INK.body,
+      overflowWrap: "break-word", colorScheme: "light",
+    }}>
+      {blocks.length
+        ? blocks.map((block, index) => <PreviewBlock key={index} block={block} />)
+        : (
+          <p style={{ color: INK.muted, font: "var(--type-body-sm)", textAlign: "center", margin: "40px 0" }}>
+            {TX(lang, "Pratinjau dokumen akan muncul di sini saat Anda menulis.", "The document preview appears here as you write.")}
+          </p>
+        )}
+    </div>
+  );
+}
+
+function useMarkdownBlocks(markdown) {
   const deferred = React.useDeferredValue(markdown);
-  const blocks = React.useMemo(() => parseMarkdown(deferred), [deferred]);
+  return React.useMemo(() => parseMarkdown(deferred), [deferred]);
+}
+
+function MarkdownPreviewPane({ markdown, lang, baseFontSize, onFullPreview }) {
+  const blocks = useMarkdownBlocks(markdown);
   return (
     <div aria-label={TX(lang, "Pratinjau Markdown", "Markdown preview")} style={{
-      flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", background: "var(--surface-sunken)",
-      border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", padding: "18px 14px",
+      flex: 1, minWidth: 0, minHeight: 0, position: "relative",
+      border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)",
+      background: "var(--surface-sunken)", overflow: "hidden", display: "flex",
+    }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: "18px 14px" }}>
+        <MarkdownPage blocks={blocks} lang={lang} baseFontSize={baseFontSize} />
+      </div>
+      {onFullPreview && (
+        <div style={{ position: "absolute", top: 8, right: 8 }}>
+          <IconButton
+            label={TX(lang, "Buka pratinjau penuh", "Open full preview")}
+            icon={Icons.maximize(16)}
+            variant="outline"
+            size="sm"
+            onClick={onFullPreview}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FullPreviewOverlay({ markdown, lang, baseFontSize, onClose }) {
+  const blocks = useMarkdownBlocks(markdown);
+  const stats = markdownStats(markdown);
+  const [zoom, setZoom] = React.useState(100);
+  const dialogRef = React.useRef(null);
+  React.useEffect(() => { dialogRef.current && dialogRef.current.focus(); }, []);
+  React.useEffect(() => {
+    const onKey = (event) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={TX(lang, "Pratinjau penuh", "Full preview")} style={{
+      position: "fixed", inset: 0, zIndex: 85, display: "flex", flexDirection: "column",
+      background: "var(--surface-page)",
     }}>
       <div style={{
-        maxWidth: 680, margin: "0 auto", minHeight: "100%", background: "var(--color-pdf-page)",
-        border: "1px solid var(--border-default)", boxShadow: "var(--shadow-card)",
-        borderRadius: 2, padding: "clamp(18px, 5vw, 44px)",
-        font: `${baseFontSize + 3}px/1.6 var(--font-sans)`, color: INK.body,
-        overflowWrap: "break-word", colorScheme: "light",
+        display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 16px",
+        borderBottom: "1px solid var(--border-default)", background: "var(--surface-card)", flex: "none",
       }}>
-        {blocks.length
-          ? blocks.map((block, index) => <PreviewBlock key={index} block={block} />)
-          : (
-            <p style={{ color: INK.muted, font: "var(--type-body-sm)", textAlign: "center", margin: "40px 0" }}>
-              {TX(lang, "Pratinjau dokumen akan muncul di sini saat Anda menulis.", "The document preview appears here as you write.")}
-            </p>
-          )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <span style={{ font: "var(--weight-semibold) 14px/1.2 var(--font-sans)", color: "var(--text-heading)" }}>
+            {TX(lang, "Pratinjau penuh", "Full preview")}
+          </span>
+          <span style={{ font: "11.5px var(--font-mono)", color: "var(--text-faint)" }}>
+            {stats.words} {TX(lang, "kata", "words")} · {stats.characters} {TX(lang, "karakter", "characters")}
+          </span>
+        </div>
+        <span style={{ flex: 1 }} />
+        <ZoomControl
+          value={zoom}
+          min={70}
+          max={160}
+          onZoomOut={() => setZoom((z) => Math.max(70, z - 10))}
+          onZoomIn={() => setZoom((z) => Math.min(160, z + 10))}
+          onReset={() => setZoom(100)}
+        />
+        <Button variant="secondary" size="sm" icon={Icons.x(15)} onClick={onClose}>
+          {TX(lang, "Tutup", "Close")} <kbd style={{
+            font: "10px var(--font-mono)", color: "var(--text-faint)",
+            border: "1px solid var(--border-default)", borderRadius: 4, padding: "1px 4px", marginLeft: 4,
+          }}>Esc</kbd>
+        </Button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "24px clamp(12px, 4vw, 40px)" }}>
+        <MarkdownPage blocks={blocks} lang={lang} baseFontSize={baseFontSize} width={Math.round(720 * (zoom / 100))} />
       </div>
     </div>
   );
@@ -222,6 +297,7 @@ function EditorToolButton({ label, onClick, children, disabled }) {
 function MarkdownWorkspace({ t, lang, opts, setOpts, isCompact, onToast }) {
   const textareaRef = React.useRef(null);
   const fileRef = React.useRef(null);
+  const [fullPreview, setFullPreview] = React.useState(false);
   const markdown = opts.markdown || "";
   const stats = markdownStats(markdown);
   const mode = isCompact
@@ -286,7 +362,7 @@ function MarkdownWorkspace({ t, lang, opts, setOpts, isCompact, onToast }) {
   ];
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10, padding: isCompact ? "10px 14px 14px" : "12px 24px 18px" }}>
+    <div className="ws-md-editor" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10, padding: isCompact ? "10px 14px 14px" : "12px 24px 18px" }}>
       <div role="toolbar" aria-label={TX(lang, "Alat format Markdown", "Markdown formatting tools")} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         {showEditor && toolButtons.map((button) => (
           <EditorToolButton key={button.label} label={button.label} onClick={button.run}>{button.text}</EditorToolButton>
@@ -347,7 +423,14 @@ function MarkdownWorkspace({ t, lang, opts, setOpts, isCompact, onToast }) {
             }}
           />
         )}
-        {showPreview && <MarkdownPreviewPane markdown={markdown} lang={lang} baseFontSize={Number(opts.fontSize) || 11} />}
+        {showPreview && (
+          <MarkdownPreviewPane
+            markdown={markdown}
+            lang={lang}
+            baseFontSize={Number(opts.fontSize) || 11}
+            onFullPreview={() => setFullPreview(true)}
+          />
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={{ font: "11.5px var(--font-mono)", color: "var(--text-faint)" }}>
@@ -364,7 +447,19 @@ function MarkdownWorkspace({ t, lang, opts, setOpts, isCompact, onToast }) {
             {TX(lang, "Kosongkan", "Clear")}
           </Button>
         )}
+        <span style={{ flex: 1 }} />
+        <Button variant="ghost" size="sm" icon={Icons.maximize(15)} onClick={() => setFullPreview(true)}>
+          {TX(lang, "Pratinjau penuh", "Full preview")}
+        </Button>
       </div>
+      {fullPreview && (
+        <FullPreviewOverlay
+          markdown={markdown}
+          lang={lang}
+          baseFontSize={Number(opts.fontSize) || 11}
+          onClose={() => setFullPreview(false)}
+        />
+      )}
     </div>
   );
 }

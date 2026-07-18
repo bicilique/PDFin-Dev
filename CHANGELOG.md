@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, with release entries grouped by date.
 - Added a local Markdown parser and pdf-lib layout engine (`markdownEngine.js`, `markdownPdf.js`) with unit tests; no new dependencies and no network requests.
 - Added a `standalone` workspace tool mode for tools without file inputs, including continuation actions that carry the generated PDF into Compress/Split/Watermark.
 - Added the tool to the home screen (conversion category), quick switcher, `/md2pdf/` route, and prerendered SEO page.
+- Added a full-screen preview overlay with zoom controls (70-160%), reachable from the preview pane corner button or the editor footer, closable via button or Escape.
 
 ### Verified
 

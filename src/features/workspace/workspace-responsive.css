@@ -400,6 +400,11 @@
   .ws-main > div[style*="overflow: auto"] {
     padding: 12px 12px calc(190px + env(safe-area-inset-bottom)) !important;
   }
+
+  /* Markdown editor: keep its footer row above the fixed mobile action bar. */
+  .ws-md-editor {
+    padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important;
+  }
 }
 
 @media (max-width: 360px) {

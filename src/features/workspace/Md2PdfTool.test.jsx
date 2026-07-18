@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceApp } from "./WorkspaceApp.jsx";
 
@@ -118,6 +118,39 @@ describe("Markdown to PDF tool", () => {
     const cta = screen.getAllByRole("button", { name: /^buat pdf$/i }).find((button) => button.disabled);
     expect(cta).toBeDisabled();
     expect(screen.getAllByText(/nama file tidak boleh kosong/i).length).toBeGreaterThan(0);
+  });
+
+  it("opens a full preview overlay with zoom and closes it with Escape", async () => {
+    window.history.replaceState(null, "", "/#md2pdf");
+    render(<WorkspaceApp />);
+
+    fireEvent.change(screen.getByLabelText(/editor markdown/i), {
+      target: { value: "# Dokumen Penuh\n\nIsi dokumen." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^pratinjau penuh$/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /pratinjau penuh/i });
+    expect(dialog).toBeInTheDocument();
+    const { getByRole, getByText } = within(dialog);
+    expect(getByRole("heading", { name: /dokumen penuh/i })).toBeInTheDocument();
+    expect(getByText(/\d+ kata · \d+ karakter/i)).toBeInTheDocument();
+
+    fireEvent.click(getByRole("button", { name: /zoom in/i }));
+    expect(getByText("110%")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /pratinjau penuh/i })).not.toBeInTheDocument());
+    expect(screen.getByLabelText(/editor markdown/i)).toBeInTheDocument();
+  });
+
+  it("opens the full preview from the preview pane corner button", async () => {
+    window.history.replaceState(null, "", "/#md2pdf");
+    render(<WorkspaceApp />);
+
+    fireEvent.change(screen.getByLabelText(/editor markdown/i), { target: { value: "# Judul" } });
+    fireEvent.click(screen.getByRole("button", { name: /buka pratinjau penuh/i }));
+
+    expect(await screen.findByRole("dialog", { name: /pratinjau penuh/i })).toBeInTheDocument();
   });
 
   it("applies bold formatting from the toolbar to the selection", () => {

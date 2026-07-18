@@ -9,6 +9,7 @@ export const WORKSPACE_TOOL_IDS = [
   "watermark",
   "img2pdf",
   "pdf2img",
+  "md2pdf",
   "pagenum",
   "flatten",
   "protect",

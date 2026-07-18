@@ -1329,7 +1329,7 @@ describe("WorkspaceApp canonical runtime", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /halaman berikutnya/i }));
     await waitFor(() => expect(screen.getByLabelText(/ke halaman/i)).toHaveValue("2"));
-    expect(screen.getByText(/akan ditempatkan di halaman 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/akan ditempatkan di.*halaman 2/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tambahkan ke halaman ini/i }));
     expect(screen.getByRole("button", { name: /halaman 2.*paraf 1/i })).toBeInTheDocument();
@@ -1346,7 +1346,7 @@ describe("WorkspaceApp canonical runtime", () => {
     const [, opts] = PdfProcess.sign.mock.calls.at(-1);
     expect(opts.outputName).toBe("contract-diparaf.pdf");
     expect(opts.placements).toHaveLength(1);
-    expect(opts.placements[0].pageIndex).toBe(1);
+    expect(opts.placements[0].srcIndex).toBe(1);
     expect(opts.placements[0].rect.x).toBeGreaterThanOrEqual(0);
     expect(opts.placements[0].rect.w).toBeGreaterThan(0.28);
   });

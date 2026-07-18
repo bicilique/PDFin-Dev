@@ -1,7 +1,8 @@
 import React from "react";
 import { Alert, Button, Input, Select, Switch } from "../../../components/index.js";
-import { Field as F3, Segmented as Seg3, SliderRow as SR3, TX as TX3, TOOL_DEFS as DEFS3, analyzeSplitRange, getOutputNameError, getPdfOutputName, sanitizePdfBaseName } from "./tools-1.jsx";
+import { Field as F3, Segmented as Seg3, SliderRow as SR3, TX as TX3, TOOL_DEFS as DEFS3, analyzeSplitRange, getOutputNameError, getPdfOutputName, outputNameValue, OutputNameField } from "./tools-1.jsx";
 import { PdfProcess } from "../engine/pdfProcess.js";
+import { listSignatures, saveSignature, deleteSignature } from "../engine/signatureStore.js";
 
 // PDFin workspace — tool defs part 3: protect, unlock, metadata, sign, OCR.
 
@@ -54,14 +55,6 @@ function PasswordInput({ id, lang, label, value, visible, onVisible, onChange, e
   );
 }
 
-function sourceBaseName(ctx, fallback = "dokumen") {
-  return sanitizePdfBaseName(ctx.files[0]?.name || fallback) || fallback;
-}
-
-function outputNameValue(ctx, suffix) {
-  return `${sourceBaseName(ctx)}-${suffix}`;
-}
-
 function normalizeKeywords(value) {
   const raw = Array.isArray(value) ? value : String(value || "").split(",");
   const seen = new Set();
@@ -97,25 +90,6 @@ function changedSummary(opts, lang) {
   const afterKeywords = (opts.keywords || []).join("\n");
   if (beforeKeywords !== afterKeywords) rows.push(TX3(lang, `${(opts.keywords || []).length} kata kunci akan disimpan`, `${(opts.keywords || []).length} keyword(s) will be saved`));
   return rows;
-}
-
-function OutputNameField({ lang, value, onChange, inputId }) {
-  const error = getOutputNameError(value, lang);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label htmlFor={inputId} style={{ font: "var(--type-label)", color: "var(--text-heading)" }}>{TX3(lang, "Nama file hasil", "Output file name")}</label>
-      <div style={{
-        display: "flex", alignItems: "center", border: `1px solid ${error ? "var(--red-600)" : "var(--border-default)"}`,
-        borderRadius: "var(--radius-md)", background: "var(--surface-card)", overflow: "hidden",
-      }}>
-        <input id={inputId} value={value || ""} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
-          onChange={(e) => onChange(e.target.value)}
-          style={{ minWidth: 0, flex: 1, border: "none", outline: "none", background: "transparent", color: "var(--text-heading)", font: "var(--type-body)", padding: "9px 10px 9px 12px" }} />
-        <span aria-hidden="true" style={{ flex: "none", borderLeft: "1px solid var(--border-default)", background: "var(--surface-sunken)", color: "var(--text-muted)", font: "var(--type-caption)", padding: "10px 11px" }}>.pdf</span>
-      </div>
-      {error && <span id={`${inputId}-error`} style={{ font: "var(--type-caption)", color: "var(--status-error-fg)" }}>{error}</span>}
-    </div>
-  );
 }
 
 function KeywordEditor({ lang, keywords, draft, onDraft, onAdd, onRemove }) {
@@ -293,15 +267,31 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function placementLabel(lang, placement, index) {
-  return TX3(lang, `Halaman ${placement.pageIndex + 1} — Paraf ${index + 1}`, `Page ${placement.pageIndex + 1} — Initials ${index + 1}`);
+function placementLabel(lang, placement, index, fileName) {
+  const pageLabel = TX3(lang, `Halaman ${placement.srcIndex + 1}`, `Page ${placement.srcIndex + 1}`);
+  return fileName
+    ? TX3(lang, `${fileName} — ${pageLabel} — Paraf ${index + 1}`, `${fileName} — ${pageLabel} — Initials ${index + 1}`)
+    : TX3(lang, `${pageLabel} — Paraf ${index + 1}`, `${pageLabel} — Initials ${index + 1}`);
 }
 
-function signatureSummary(lang, placements) {
-  const pages = new Set((placements || []).map((p) => p.pageIndex)).size;
-  return TX3(lang,
-    `${placements.length} paraf visual akan diterapkan pada ${pages} halaman`,
-    `${placements.length} visual initial(s) will be applied to ${pages} page(s)`);
+function signatureSummary(lang, placements, fileCount = 1) {
+  const pages = new Set((placements || []).map((p) => `${p.fileId}:${p.srcIndex}`)).size;
+  return fileCount > 1
+    ? TX3(lang,
+      `${placements.length} paraf visual akan diterapkan pada ${pages} halaman di ${fileCount} file`,
+      `${placements.length} visual initial(s) will be applied to ${pages} page(s) across ${fileCount} file(s)`)
+    : TX3(lang,
+      `${placements.length} paraf visual akan diterapkan pada ${pages} halaman`,
+      `${placements.length} visual initial(s) will be applied to ${pages} page(s)`);
+}
+
+// The template file is the first file (in ctx.files order) that has at
+// least one explicit placement — files without their own placements
+// inherit its rect/page-relative position (see PdfProcess.sign).
+function findTemplateFileId(files, placements) {
+  const withPlacement = new Set((placements || []).map((pl) => pl.fileId));
+  const file = (files || []).find((f) => withPlacement.has(f.id));
+  return file?.id || null;
 }
 
 function clampRectToPage(rect) {
@@ -321,17 +311,69 @@ function updatePlacement(opts, id, updater) {
 }
 
 // ---- Initials: typed or uploaded visual initials, placed on specific pages ----
+function SignatureLibrary({ lang, signatures, onUse, onDelete }) {
+  const [urls, setUrls] = React.useState({});
+  React.useEffect(() => {
+    const next = {};
+    signatures.forEach((sig) => {
+      next[sig.id] = URL.createObjectURL(new Blob([sig.bytes], { type: sig.type || "image/png" }));
+    });
+    setUrls(next);
+    return () => Object.values(next).forEach((url) => URL.revokeObjectURL(url));
+  }, [signatures]);
+
+  if (!signatures.length) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={{ font: "var(--type-label)", color: "var(--text-heading)" }}>{TX3(lang, "Paraf tersimpan", "Saved initials")}</span>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {signatures.map((sig) => (
+          <div key={sig.id} style={{
+            position: "relative", width: 92, padding: "8px", display: "flex", alignItems: "center", justifyContent: "center",
+            border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", background: "var(--color-pdf-page)", cursor: "pointer",
+          }} onClick={() => onUse(sig)}>
+            {urls[sig.id] && <img src={urls[sig.id]} alt={sig.label || ""} style={{ maxWidth: "100%", maxHeight: 44, objectFit: "contain" }} />}
+            <button type="button" aria-label={TX3(lang, "Hapus paraf tersimpan", "Delete saved initials")}
+              onClick={(e) => { e.stopPropagation(); onDelete(sig.id); }}
+              style={{
+                position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
+                border: "1px solid var(--border-default)", background: "var(--surface-card)", color: "var(--text-muted)",
+                cursor: "pointer", font: "12px/1 var(--font-sans)", padding: 0,
+              }}>×</button>
+          </div>
+        ))}
+      </div>
+      <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>
+        {TX3(lang, "Paraf disimpan di perangkat Anda, tidak dikirim ke server mana pun.", "Signatures are stored on your device, never sent to any server.")}
+      </span>
+    </div>
+  );
+}
+
 export function SignPad({ lang, onChange }) {
   const [tab, setTab] = React.useState("type");
   const [name, setName] = React.useState("");
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [dragActive, setDragActive] = React.useState(false);
+  const [signatures, setSignatures] = React.useState([]);
   const imgRef = React.useRef(null);
+
+  const refreshLibrary = React.useCallback(() => {
+    listSignatures().then(setSignatures).catch(() => {});
+  }, []);
+  React.useEffect(() => { refreshLibrary(); }, [refreshLibrary]);
+
+  const persist = (source) => {
+    saveSignature(source).then(refreshLibrary).catch(() => {});
+  };
 
   const exportCanvas = (canvas, label) => {
     canvas.toBlob(async (blob) => {
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      onChange({ bytes, url: canvas.toDataURL("image/png"), type: "image/png", aspect: canvas.width / canvas.height, label });
+      const source = { bytes, url: canvas.toDataURL("image/png"), type: "image/png", aspect: canvas.width / canvas.height, label };
+      onChange(source);
+      persist(source);
     }, "image/png");
   };
   const typeName = (v) => {
@@ -368,7 +410,9 @@ export function SignPad({ lang, onChange }) {
         el.onerror = reject;
         el.src = url;
       });
-      onChange({ bytes, url, type: file.type || "image/png", aspect: img.naturalWidth / img.naturalHeight, label: file.name });
+      const source = { bytes, url, type: file.type || "image/png", aspect: img.naturalWidth / img.naturalHeight, label: file.name };
+      onChange(source);
+      persist(source);
     } catch {
       setError(TX3(lang, "Gambar paraf gagal dimuat.", "Initials image failed to load."));
     } finally {
@@ -376,11 +420,18 @@ export function SignPad({ lang, onChange }) {
     }
   };
 
+  const useSaved = (sig) => {
+    onChange({ bytes: sig.bytes, url: URL.createObjectURL(new Blob([sig.bytes], { type: sig.type || "image/png" })), type: sig.type || "image/png", aspect: sig.aspect || 3, label: sig.label });
+  };
+  const removeSaved = (id) => {
+    deleteSignature(id).then(refreshLibrary).catch(() => {});
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <Seg3 value={tab} onChange={setTab} options={[
         { value: "type", label: TX3(lang, "Ketik", "Type") },
-        { value: "draw", label: TX3(lang, "Gambar", "Draw") },
+        { value: "upload", label: TX3(lang, "Unggah", "Upload") },
       ]} />
       {tab === "type" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -393,32 +444,51 @@ export function SignPad({ lang, onChange }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <Button variant="secondary" size="sm" onClick={() => imgRef.current?.click()}>{TX3(lang, "Unggah gambar", "Upload image")}</Button>
+          <div
+            onClick={() => imgRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => { e.preventDefault(); setDragActive(false); loadImageFile(e.dataTransfer.files?.[0]); }}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 14px",
+              border: `2px dashed ${dragActive ? "var(--border-brand)" : "var(--border-strong)"}`,
+              borderRadius: "var(--radius-lg)", background: dragActive ? "var(--surface-brand-subtle)" : "var(--gradient-upload)",
+              cursor: "pointer", transition: "background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out)",
+            }}>
+            <span style={{ font: "var(--type-caption)", color: "var(--text-muted)", textAlign: "center" }}>
+              {TX3(lang, "Seret gambar ke sini, atau", "Drag an image here, or")}
+            </span>
+            <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); imgRef.current?.click(); }}>{TX3(lang, "Unggah gambar", "Upload image")}</Button>
+          </div>
           <input ref={imgRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }} onChange={(e) => loadImageFile(e.target.files[0])} />
           {loading && <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{TX3(lang, "Memuat gambar...", "Loading image...")}</span>}
           {error && <span role="alert" style={{ font: "var(--type-caption)", color: "var(--status-error-fg)" }}>{error}</span>}
         </div>
       )}
+      <SignatureLibrary lang={lang} signatures={signatures} onUse={useSaved} onDelete={removeSaved} />
     </div>
   );
 }
 
 DEFS3.sign = {
-  view: "preview",
+  view: "preview", multiFile: true,
   previewKind: "processed",
   defaults: { signatureSource: null, placements: [], selectedPlacementId: null, widthPct: 28, deletedPlacement: null, outputName: "" },
   Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const currentPage = ctx.previewPage || 1;
+    const currentPageObj = ctx.pages[currentPage - 1] || null;
     const selected = (opts.placements || []).find((placement) => placement.id === opts.selectedPlacementId);
     const baseOutput = opts.outputName || outputNameValue(ctx, "diparaf");
+    const templateFileId = findTemplateFileId(ctx.files, opts.placements);
+    const fileName = (fileId) => ctx.files.find((f) => f.id === fileId)?.name || "";
     React.useEffect(() => {
       if (!opts.outputName && ctx.files[0]) setOpts((next) => next.outputName ? next : { ...next, outputName: outputNameValue(ctx, "diparaf") });
     }, [ctx.files[0]?.id]);
     const addPlacement = () => {
-      if (!opts.signatureSource) return;
+      if (!opts.signatureSource || !currentPageObj) return;
       const id = nextSignaturePlacementId();
       const rect = clampRectToPage({ x: 0.36, y: 0.72, w: (opts.widthPct || 28) / 100 }, opts.signatureSource.aspect);
-      setOpts({ ...opts, selectedPlacementId: id, placements: [...(opts.placements || []), { id, pageIndex: currentPage - 1, rect, source: opts.signatureSource }] });
+      setOpts({ ...opts, selectedPlacementId: id, placements: [...(opts.placements || []), { id, fileId: currentPageObj.fileId, srcIndex: currentPageObj.srcIndex, rect, source: opts.signatureSource }] });
     };
     const moveSelected = (dx, dy) => {
       if (!selected) return;
@@ -436,6 +506,10 @@ DEFS3.sign = {
       if (!opts.deletedPlacement) return;
       setOpts({ ...opts, selectedPlacementId: opts.deletedPlacement.id, placements: [...(opts.placements || []), opts.deletedPlacement], deletedPlacement: null });
     };
+    const goToFile = (file) => {
+      const index = ctx.pages.findIndex((p) => p.fileId === file.id);
+      if (index >= 0) ctx.goToPreviewPage?.(index + 1);
+    };
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Alert tone="info">{TX3(lang, "Tambahkan paraf visual ke PDF. Ini bukan tanda tangan elektronik atau tanda tangan digital tersertifikasi.", "Add visible initials to the PDF. This is not an electronic signature or a certified digital signature.")}</Alert>
@@ -443,18 +517,45 @@ DEFS3.sign = {
         {opts.signatureSource?.url && <img src={opts.signatureSource.url} alt={TX3(lang, "Pratinjau paraf", "Initials preview")} style={{ width: 120, maxHeight: 70, objectFit: "contain", border: "1px solid var(--border-default)", borderRadius: 6, background: "var(--color-pdf-page)" }} />}
         <SR3 label={TX3(lang, "Lebar paraf", "Initials width")} value={opts.widthPct || 28} min={10} max={60} unit="%" onChange={(widthPct) => setOpts({ ...opts, widthPct })} />
         <F3 label={TX3(lang, "Target halaman", "Target page")}>
-          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{TX3(lang, `Akan ditempatkan di halaman ${currentPage}`, `Will be placed on page ${currentPage}`)}</span>
-          <Button variant="secondary" size="sm" disabled={!opts.signatureSource} onClick={addPlacement}>{TX3(lang, "Tambahkan ke halaman ini", "Add to this page")}</Button>
+          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>
+            {currentPageObj ? TX3(lang, `Akan ditempatkan di ${fileName(currentPageObj.fileId)} — halaman ${currentPageObj.srcIndex + 1}`, `Will be placed on ${fileName(currentPageObj.fileId)} — page ${currentPageObj.srcIndex + 1}`) : ""}
+          </span>
+          <Button variant="secondary" size="sm" disabled={!opts.signatureSource || !currentPageObj} onClick={addPlacement}>{TX3(lang, "Tambahkan ke halaman ini", "Add to this page")}</Button>
         </F3>
+        {ctx.validFiles.length > 1 && (
+          <F3 label={TX3(lang, "File & posisi", "Files & position")}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {ctx.validFiles.map((file) => {
+                const hasOwn = (opts.placements || []).some((pl) => pl.fileId === file.id);
+                return (
+                  <div key={file.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    padding: "8px 10px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)", background: "var(--surface-card)",
+                  }}>
+                    <span style={{ font: "var(--type-caption)", color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
+                    <span style={{ font: "var(--type-caption)", color: hasOwn ? "var(--status-success-fg)" : "var(--text-muted)", flex: "none" }}>
+                      {hasOwn
+                        ? TX3(lang, "Kustom", "Custom")
+                        : templateFileId
+                          ? TX3(lang, `Ikut ${fileName(templateFileId)}`, `Follows ${fileName(templateFileId)}`)
+                          : TX3(lang, "Belum ada posisi", "No position yet")}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={() => goToFile(file)}>{TX3(lang, "Sesuaikan", "Adjust")}</Button>
+                  </div>
+                );
+              })}
+            </div>
+          </F3>
+        )}
         <F3 label={TX3(lang, "Daftar paraf", "Initial placements")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {(opts.placements || []).length ? opts.placements.map((placement, index) => (
-              <button key={placement.id} type="button" onClick={() => { setOpts({ ...opts, selectedPlacementId: placement.id }); ctx.goToPreviewPage?.(placement.pageIndex + 1); }} style={{
+              <button key={placement.id} type="button" onClick={() => { setOpts({ ...opts, selectedPlacementId: placement.id }); const idx = ctx.pages.findIndex((p) => p.fileId === placement.fileId && p.srcIndex === placement.srcIndex); if (idx >= 0) ctx.goToPreviewPage?.(idx + 1); }} style={{
                 textAlign: "left", padding: "8px 10px", borderRadius: "var(--radius-md)",
                 border: `1px solid ${opts.selectedPlacementId === placement.id ? "var(--border-brand)" : "var(--border-default)"}`,
                 background: opts.selectedPlacementId === placement.id ? "var(--surface-brand-subtle)" : "var(--surface-card)",
                 color: "var(--text-heading)", cursor: "pointer", font: "var(--type-caption)",
-              }}>{placementLabel(lang, placement, index)}</button>
+              }}>{placementLabel(lang, placement, index, ctx.validFiles.length > 1 ? fileName(placement.fileId) : "")}</button>
             )) : <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{TX3(lang, "Belum ada paraf.", "No initials yet.")}</span>}
           </div>
         </F3>
@@ -473,15 +574,15 @@ DEFS3.sign = {
         )}
         {opts.deletedPlacement && <Button variant="ghost" size="sm" onClick={restoreDeleted}>{TX3(lang, "Urungkan hapus paraf", "Undo initials deletion")}</Button>}
         <F3 label={TX3(lang, "Ringkasan", "Summary")}>
-          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{(opts.placements || []).length ? signatureSummary(lang, opts.placements) : TX3(lang, "Tambahkan minimal satu paraf visual.", "Add at least one visual initial.")}</span>
+          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{(opts.placements || []).length ? signatureSummary(lang, opts.placements, ctx.validFiles.length) : TX3(lang, "Tambahkan minimal satu paraf visual.", "Add at least one visual initial.")}</span>
         </F3>
-        <OutputNameField lang={lang} value={baseOutput} inputId="sign-output-name" onChange={(outputName) => setOpts({ ...opts, outputName })} />
+        <OutputNameField lang={lang} value={baseOutput} inputId="sign-output-name" onChange={(outputName) => setOpts({ ...opts, outputName })} batchCount={ctx.validFiles.length} />
       </div>
     );
   },
   overlay: (opts, setOpts) => (p, i) => (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      {(opts.placements || []).filter((placement) => placement.pageIndex === i).map((placement) => (
+      {(opts.placements || []).filter((placement) => placement.fileId === p.fileId && placement.srcIndex === p.srcIndex).map((placement) => (
         <SignatureOverlay key={placement.id} placement={placement} selected={opts.selectedPlacementId === placement.id} onSelect={() => setOpts({ ...opts, selectedPlacementId: placement.id })} onChange={(nextRect) => setOpts(updatePlacement(opts, placement.id, (item) => ({ ...item, rect: nextRect })))} />
       ))}
     </div>
@@ -489,7 +590,7 @@ DEFS3.sign = {
   disabled: (ctx, opts, lang = "id") => !(opts.placements || []).length || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "diparaf"), lang),
   disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "diparaf"), lang) || TX3(lang, "Tambahkan minimal satu paraf visual.", "Add at least one visual initial."),
   actionLabel: (ctx, opts, t, lang) => TX3(lang, "Paraf dokumen PDF", "Add document initials"),
-  successSummary: (result, ctx, opts, t, lang) => signatureSummary(lang, opts.placements || []),
+  successSummary: (result, ctx, opts, t, lang) => signatureSummary(lang, opts.placements || [], ctx.validFiles.length),
   process: (ctx, opts, onP, lang) => PdfProcess.sign(ctx.files, { ...opts, outputName: getPdfOutputName(opts.outputName || outputNameValue(ctx, "diparaf"), lang) }, onP),
 };
 

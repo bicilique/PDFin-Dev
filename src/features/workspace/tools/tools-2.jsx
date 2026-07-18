@@ -1,6 +1,6 @@
 import React from "react";
 import { Alert, Button, Input, Select, Switch } from "../../../components/index.js";
-import { Field, Segmented, SliderRow, PosGrid, TX, TOOL_DEFS, getScopeError, pageScopeIncludes } from "./tools-1.jsx";
+import { Field, Segmented, SliderRow, PosGrid, TX, TOOL_DEFS, getScopeError, pageScopeIncludes, OutputNameField, getOutputNameError, getPdfOutputName, outputNameValue } from "./tools-1.jsx";
 import { PdfProcess } from "../engine/pdfProcess.js";
 
 // PDFin workspace — tool defs part 2: watermark, images->PDF, PDF->image, page numbers, flatten.
@@ -26,13 +26,21 @@ function appliedNumber(opts, pageIndex, totalPages) {
 TOOL_DEFS.watermark = {
   view: "preview", multiFile: true,
   previewKind: "processed",
-  defaults: { scope: "all", range: "1-3", kind: "text", text: "RAHASIA", opacity: 24, rotation: -35, size: 40, align: "middle-center", color: "#6b6787", imageBytes: null, imageType: null, imageUrl: null },
+  defaults: { scope: "all", range: "1-3", kind: "text", text: "RAHASIA", opacity: 24, rotation: -35, size: 40, align: "middle-center", color: "#6b6787", imageBytes: null, imageType: null, imageUrl: null, outputName: "", loadedFor: null },
   Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const imgRef = React.useRef(null);
     const pageCount = ctx.pages.filter((p) => !p.deleted).length;
+    const file = ctx.files[0];
     React.useEffect(() => () => {
       if (opts.imageUrl) URL.revokeObjectURL(opts.imageUrl);
     }, [opts.imageUrl]);
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: outputNameValue(ctx, "watermark"), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Alert tone="info">{TX(lang,
@@ -70,6 +78,9 @@ TOOL_DEFS.watermark = {
         <Field label={TX(lang, "Penempatan", "Placement")}>
           <PosGrid lang={lang} value={opts.align} onChange={(align) => setOpts({ ...opts, align })} />
         </Field>
+        <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "watermark")}
+          onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="watermark-output-name"
+          batchCount={ctx.files.length} />
       </div>
     );
   },
@@ -90,21 +101,27 @@ TOOL_DEFS.watermark = {
       </div>
     );
   },
-  disabled: (ctx, opts, lang) => !!getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || (opts.kind === "text" ? !opts.text.trim() : !opts.imageBytes),
-  disabledReason: (ctx, opts, t, lang) => opts.kind === "text"
-    ? (getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || TX(lang, "Isi teks watermark sebelum memproses.", "Enter watermark text before processing."))
-    : (getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || TX(lang, "Pilih gambar watermark sebelum memproses.", "Choose a watermark image before processing.")),
+  disabled: (ctx, opts, lang) => !!getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang)
+    || (opts.kind === "text" ? !opts.text.trim() : !opts.imageBytes)
+    || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "watermark"), lang),
+  disabledReason: (ctx, opts, t, lang) => {
+    const outputError = getOutputNameError(opts.outputName || outputNameValue(ctx, "watermark"), lang);
+    if (outputError) return outputError;
+    return opts.kind === "text"
+      ? (getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || TX(lang, "Isi teks watermark sebelum memproses.", "Enter watermark text before processing."))
+      : (getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || TX(lang, "Pilih gambar watermark sebelum memproses.", "Choose a watermark image before processing."));
+  },
   nextAction: (ctx, opts, t, lang) => TX(lang, "Watermark akan diterapkan secara lokal ke pratinjau PDF.", "The watermark will be applied locally to the previewed PDF."),
   successSummary: (result, ctx, opts, t, lang) => {
     const files = result.outputs.length;
     return TX(lang, `${files} file PDF diberi watermark di browser.`, `${files} PDF file${files === 1 ? "" : "s"} watermarked in your browser.`);
   },
-  process: (ctx, opts, onP) => PdfProcess.watermark(ctx.files, opts, onP),
+  process: (ctx, opts, onP, lang) => PdfProcess.watermark(ctx.files, { ...opts, outputName: opts.outputName || outputNameValue(ctx, "watermark") }, onP),
 };
 
 TOOL_DEFS.img2pdf = {
   view: "grid", acceptImages: true, multiFile: true, allowReorderFiles: true, reorder: true, selectable: false,
-  defaults: { pageSize: "a4", orientation: "portrait", margin: "small" },
+  defaults: { pageSize: "a4", orientation: "portrait", margin: "small", outputName: "" },
   Panel: ({ t, lang, opts, setOpts, ctx }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Select label={TX(lang, "Ukuran halaman", "Page size")} value={opts.pageSize} onChange={(e) => setOpts({ ...opts, pageSize: e.target.value })}
@@ -127,22 +144,32 @@ TOOL_DEFS.img2pdf = {
           { value: "large", label: TX(lang, "Besar", "Large") },
         ]} />
       </Field>
+      <OutputNameField lang={lang} value={opts.outputName || TX(lang, "gambar-ke-pdf", "images")}
+        onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="img2pdf-output-name" />
       <Field label={t.inspector.output}>
         <span style={{ font: "12.5px var(--font-mono)", color: "var(--text-muted)" }}>1 PDF · {ctx.files.length} {t.success.pages}</span>
       </Field>
     </div>
   ),
-  disabled: (ctx) => ctx.files.length === 0,
-  outName: (lang) => TX(lang, "gambar-ke-pdf.pdf", "images.pdf"),
-  process: (ctx, opts, onP, lang) => PdfProcess.imagesToPdf(ctx.files, opts, TOOL_DEFS.img2pdf.outName(lang), onP),
+  disabled: (ctx, opts, lang = "id") => ctx.files.length === 0 || !!getOutputNameError(opts.outputName || TX(lang, "gambar-ke-pdf", "images"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || TX(lang, "gambar-ke-pdf", "images"), lang) || t.toolRequirements.img2pdf,
+  process: (ctx, opts, onP, lang) => PdfProcess.imagesToPdf(ctx.files, opts, getPdfOutputName(opts.outputName || TX(lang, "gambar-ke-pdf", "images"), lang), onP),
 };
 
 TOOL_DEFS.pdf2img = {
   view: "grid", selectable: true,
-  defaults: { format: "png", dpi: 150, quality: 85 },
+  defaults: { format: "png", dpi: 150, quality: 85, outputName: "", loadedFor: null },
   Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const live = ctx.pages.filter((p) => !p.deleted);
     const n = ctx.selection.size || live.length;
+    const file = ctx.files[0];
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: outputNameValue(ctx, "halaman"), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field label={TX(lang, "Format", "Format")}>
@@ -155,6 +182,9 @@ TOOL_DEFS.pdf2img = {
         {opts.format === "jpeg" && (
           <SliderRow label={TX(lang, "Kualitas", "Quality")} value={opts.quality} min={40} max={100} unit="%" onChange={(quality) => setOpts({ ...opts, quality })} />
         )}
+        <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "halaman")}
+          onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="pdf2img-output-name"
+          extension={opts.format === "jpeg" ? "jpg" : "png"} batchCount={n} />
         <Field label={t.inspector.output} hint={TX(lang, "Tanpa pilihan = semua halaman.", "No selection = all pages.")}>
           <span style={{ font: "12.5px var(--font-mono)", color: "var(--text-muted)" }}>{n} {opts.format.toUpperCase()}</span>
         </Field>
@@ -162,8 +192,10 @@ TOOL_DEFS.pdf2img = {
     );
   },
   processLabel: (t, lang) => TX(lang, "Merender halaman…", "Rendering pages…"),
+  disabled: (ctx, opts, lang = "id") => !!getOutputNameError(opts.outputName || outputNameValue(ctx, "halaman"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "halaman"), lang) || t.toolRequirements.pdf2img,
   process: (ctx, opts, onP, lang) => {
-    const base = ctx.files[0] ? ctx.files[0].name.replace(/\.pdf$/i, "") : "halaman";
+    const base = opts.outputName || outputNameValue(ctx, "halaman");
     return PdfProcess.pdfToImages(ctx.pages, { ...opts, selected: ctx.selection }, base, onP);
   },
 };
@@ -171,8 +203,17 @@ TOOL_DEFS.pdf2img = {
 TOOL_DEFS.pagenum = {
   view: "preview", multiFile: true,
   previewKind: "processed",
-  defaults: { scope: "all", range: "1-3", excludeFirst: false, startAt: 1, position: "bottom-center", format: "n", font: "helvetica", fontSize: 11, color: "ink", margin: 28 },
-  Panel: ({ t, lang, opts, setOpts, ctx }) => (
+  defaults: { scope: "all", range: "1-3", excludeFirst: false, startAt: 1, position: "bottom-center", format: "n", font: "helvetica", fontSize: 11, color: "ink", margin: 28, outputName: "", loadedFor: null },
+  Panel: ({ t, lang, opts, setOpts, ctx }) => {
+    const file = ctx.files[0];
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: outputNameValue(ctx, "bernomor"), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
+    return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Alert tone="info">{TX(lang,
         "Pratinjau nomor halaman menunjukkan posisi dan gaya sebelum PDF diproses.",
@@ -203,8 +244,12 @@ TOOL_DEFS.pagenum = {
           ))}
         </div>
       </Field>
+      <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "bernomor")}
+        onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="pagenum-output-name"
+        batchCount={ctx.files.length} />
     </div>
-  ),
+    );
+  },
   overlay: (opts) => (p, i, total) => {
     if (!pageScopeIncludes(opts, i, total)) return null;
     const colors = { ink: "#2B2740", gray: "#8C88A0", violet: "#5518B4" };
@@ -224,21 +269,32 @@ TOOL_DEFS.pagenum = {
       </div>
     );
   },
-  disabled: (ctx, opts, lang) => !!getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang),
-  disabledReason: (ctx, opts, t, lang) => getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || t.toolRequirements.pagenum,
+  disabled: (ctx, opts, lang) => !!getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang)
+    || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "bernomor"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "bernomor"), lang)
+    || getScopeError(opts, ctx.pages.filter((p) => !p.deleted).length, lang) || t.toolRequirements.pagenum,
   nextAction: (ctx, opts, t, lang) => TX(lang, "Nomor halaman akan diterapkan secara lokal ke semua halaman.", "Page numbers will be applied locally to every page."),
   successSummary: (result, ctx, opts, t, lang) => {
     const files = result.outputs.length;
     return TX(lang, `${files} file PDF diberi nomor halaman di browser.`, `${files} PDF file${files === 1 ? "" : "s"} numbered in your browser.`);
   },
-  process: (ctx, opts, onP) => PdfProcess.pageNumbers(ctx.files, opts, onP),
+  process: (ctx, opts, onP, lang) => PdfProcess.pageNumbers(ctx.files, { ...opts, outputName: opts.outputName || outputNameValue(ctx, "bernomor") }, onP),
 };
 
 TOOL_DEFS.flatten = {
   view: "preview", multiFile: true,
   previewKind: "flatten",
-  defaults: { forms: true, annotations: true },
-  Panel: ({ t, lang, opts, setOpts }) => (
+  defaults: { forms: true, annotations: true, outputName: "", loadedFor: null },
+  Panel: ({ t, lang, opts, setOpts, ctx }) => {
+    const file = ctx.files[0];
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: outputNameValue(ctx, "flat"), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
+    return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <OptionSummary
         label={TX(lang, "Ratakan isian formulir", "Flatten form fields")}
@@ -257,10 +313,15 @@ TOOL_DEFS.flatten = {
           {[opts.forms && TX(lang, "Isian formulir akan dikunci sebagai konten halaman.", "Form fields will be locked into page content."), opts.annotations && TX(lang, "Anotasi akan diproses sebagai konten permanen bila didukung PDF.", "Annotations will be processed as permanent content when supported by the PDF.")].filter(Boolean).join(" ")}
         </Alert>
       )}
+      <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "flat")}
+        onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="flatten-output-name"
+        batchCount={ctx.files.length} />
     </div>
-  ),
-  disabled: (ctx, opts) => !opts.forms && !opts.annotations,
-  process: (ctx, opts, onP) => PdfProcess.flatten(ctx.files, opts, onP),
+    );
+  },
+  disabled: (ctx, opts, lang = "id") => (!opts.forms && !opts.annotations) || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "flat"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "flat"), lang) || t.toolRequirements.flatten,
+  process: (ctx, opts, onP, lang) => PdfProcess.flatten(ctx.files, { ...opts, outputName: opts.outputName || outputNameValue(ctx, "flat") }, onP),
 };
 
 function ScopeControl({ lang, opts, setOpts, pageCount, allowExcludeFirst = false }) {

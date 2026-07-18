@@ -48,6 +48,8 @@ describe("analytics", () => {
     analytics.trackPdfEvent("pdf_tool_opened", {
       tool: "merge",
       file_count: 2,
+      file_type: "pdf",
+      file_size_bucket: "0-10MB",
       filename: "secret.pdf",
       password: "secret",
       ocr_text: "hidden",
@@ -59,7 +61,12 @@ describe("analytics", () => {
     expect(normalizeDataLayer(win.dataLayer)).toEqual([
       ["js", now],
       ["config", MEASUREMENT_ID],
-      ["event", "pdf_tool_opened", { tool: "merge", file_count: 2 }],
+      ["event", "pdf_tool_opened", {
+        tool: "merge",
+        file_count: 2,
+        file_type: "pdf",
+        file_size_bucket: "0-10MB",
+      }],
     ]);
   });
 

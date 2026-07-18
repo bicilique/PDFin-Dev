@@ -6,6 +6,7 @@ import { SelfHostedPage } from "../features/selfHosted/SelfHostedPage.jsx";
 import { WorkspaceApp } from "../features/workspace/WorkspaceApp.jsx";
 import { DEFAULT_TOOL_ID, getToolFromHash, getToolFromPath, getToolHref, isPrivacyRoute, isSelfHostedRoute, isWorkspaceRoute } from "./toolRoutes.js";
 import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "./theme.js";
+import { getInitialLang, persistLangPreference } from "./locale.js";
 
 function getInitialScreen() {
   if (isPrivacyRoute()) return "privacy";
@@ -14,7 +15,7 @@ function getInitialScreen() {
 }
 
 export function App() {
-  const [lang, setLang] = React.useState("id");
+  const [lang, setLang] = React.useState(getInitialLang);
   const [theme, setTheme] = React.useState(getInitialTheme);
   const [screen, setScreen] = React.useState(getInitialScreen);
 
@@ -26,6 +27,7 @@ export function App() {
   React.useEffect(() => {
     applyTheme(theme);
     document.documentElement.setAttribute("lang", lang);
+    persistLangPreference(lang);
   }, [theme, lang]);
 
   React.useEffect(() => {
@@ -75,7 +77,7 @@ export function App() {
   };
 
   if (screen === "workspace") {
-    return <WorkspaceApp initialLang={lang} initialTheme={theme} onHome={openHome} />;
+    return <WorkspaceApp initialLang={lang} initialTheme={theme} onHome={openHome} onLangChange={setLang} />;
   }
 
   const content = screen === "privacy"

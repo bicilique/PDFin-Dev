@@ -4,8 +4,23 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.jsx";
 import { SelfHostedPage } from "../features/selfHosted/SelfHostedPage.jsx";
+import { LANG_STORAGE_KEY } from "./locale.js";
+
+function forceNavigatorLanguage(language) {
+  vi.spyOn(window.navigator, "language", "get").mockReturnValue(language);
+  if ("userLanguage" in window.navigator) {
+    vi.spyOn(window.navigator, "userLanguage", "get").mockReturnValue(language);
+  }
+  if ("languages" in window.navigator) {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue([language]);
+  }
+}
 
 describe("App tool routing", () => {
+  beforeEach(() => {
+    forceNavigatorLanguage("id-ID");
+  });
+
   afterEach(() => {
     cleanup();
     window.history.replaceState(null, "", "/");
@@ -223,6 +238,36 @@ describe("App tool routing", () => {
     const dropTitle = await screen.findByText(/letakkan file di sini/i);
     const dropZone = dropTitle.closest("div[style*='2px dashed']");
     expect(dropZone).toHaveStyle({ background: "var(--gradient-upload)" });
+  });
+
+  it("defaults to Indonesian for Indonesian browser locale", () => {
+    forceNavigatorLanguage("id-ID");
+    window.history.replaceState(null, "", "/");
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /kelola pdf langsung di browser/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ruang kerja/i })).toHaveAttribute("href", "/merge/");
+  });
+
+  it("defaults to English for non-Indonesian browser locale", () => {
+    forceNavigatorLanguage("en-US");
+    window.history.replaceState(null, "", "/");
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /manage pdfs directly in your browser/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /workspace/i })).toHaveAttribute("href", "/merge/");
+  });
+
+  it("uses persisted language preference over navigator language", () => {
+    forceNavigatorLanguage("en-US");
+    localStorage.setItem(LANG_STORAGE_KEY, "id");
+    window.history.replaceState(null, "", "/");
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /kelola pdf langsung di browser/i })).toBeInTheDocument();
   });
 });
 

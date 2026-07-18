@@ -11,6 +11,7 @@ import { DocPreview, LazyThumb, PageGrid, Sidebar } from "./WorkspaceViews.jsx";
 import { TOOL_DEFS } from "./tools/tools-1.jsx";
 import "./tools/tools-2.jsx";
 import "./tools/tools-3.jsx";
+import "./tools/tools-4.jsx";
 import { WORKSPACE_TOOL_IDS } from "./toolCatalog.js";
 import "./workspace-responsive.css";
 
@@ -123,7 +124,8 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   const [pages, setPages] = React.useState([]);
   const [selection, setSelection] = React.useState(new Set());
   const [opts, setOpts] = React.useState(DEFS[hashTool()].defaults);
-  const [stage, setStage] = React.useState("empty");
+  // Standalone tools (e.g. Markdown to PDF) have no file-upload empty state.
+  const [stage, setStage] = React.useState(() => (DEFS[hashTool()].standalone ? "ready" : "empty"));
   const [progress, setProgress] = React.useState(0);
   const [procLabel, setProcLabel] = React.useState("");
   const [result, setResult] = React.useState(null);
@@ -211,13 +213,13 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     if (next === tool) { setSwitcher(false); return; }
     // Files with a mismatched kind (images vs pdf) don't carry across
     const nextDef = DEFS[next];
-    const keep = !!files.length && !!nextDef.acceptImages === !!def.acceptImages;
+    const keep = !!files.length && !nextDef.standalone && !def.standalone && !!nextDef.acceptImages === !!def.acceptImages;
     setTool(next);
     setOpts(nextDef.defaults);
     setSelection(new Set());
     setResult(null); setErrMsg("");
     undoStack.current = [];
-    if (!keep) { PdfEngine.reset(); PdfProcess.clearCache(); setFiles([]); setPages([]); setStage("empty"); }
+    if (!keep) { PdfEngine.reset(); PdfProcess.clearCache(); setFiles([]); setPages([]); setStage(nextDef.standalone ? "ready" : "empty"); }
     else setStage(files.length ? "ready" : "empty");
     if (pushHash) window.history.pushState(null, "", getToolHref(next));
     setSwitcher(false);
@@ -462,6 +464,12 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     const abortController = new AbortController();
     processingAbortRef.current = abortController;
     trackPdfEvent("pdf_process_started", workspaceAnalyticsPayload(tool, validFiles, pages));
+    if (def.standalone) {
+      // Standalone tools never go through addFiles, so track recent usage here.
+      const toolIds = [tool, ...recent.filter((id) => id !== tool)].slice(0, 6);
+      setRecent(toolIds);
+      localStorage.setItem("pdfin-ws-recent-tools", JSON.stringify(toolIds));
+    }
     setStage("processing"); setProgress(0);
     setProcLabel(def.processLabel ? def.processLabel(t, lang) : t.stage.processing);
     const t0 = performance.now();
@@ -503,7 +511,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     processingAbortRef.current?.abort();
     trackPdfEvent("pdf_process_cancelled", workspaceAnalyticsPayload(tool, validFiles, pages));
     if (def.sanitizeAfterProcess) setOpts((current) => def.sanitizeAfterProcess(current));
-    setStage(files.length ? "ready" : "empty");
+    setStage(def.standalone || files.length ? "ready" : "empty");
   };
 
   const download = (o) => {
@@ -518,6 +526,22 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   };
   const downloadAll = () => result.outputs.forEach((o, i) => setTimeout(() => download(o), i * 350));
+  // Standalone tools have no source files to carry over, so continuation loads the
+  // generated PDF output into the next tool instead.
+  const continuationFileRef = React.useRef(null);
+  const continueWith = (next) => {
+    if (def.standalone && result?.outputs?.length) {
+      const output = result.outputs.find((o) => /\.pdf$/i.test(o.name));
+      if (output) continuationFileRef.current = new File([output.blob], output.name, { type: "application/pdf" });
+    }
+    switchTool(next);
+  };
+  React.useEffect(() => {
+    if (!continuationFileRef.current) return;
+    const file = continuationFileRef.current;
+    continuationFileRef.current = null;
+    if (!DEFS[tool].standalone && !DEFS[tool].acceptImages) addFiles([file]);
+  }, [tool]);
   const continuationActions = React.useMemo(() => {
     if (!result || !result.outputs?.length) return [];
     const hasPdfOutput = result.outputs.some((o) => /\.pdf$/i.test(o.name) || o.blob?.type === "application/pdf");
@@ -580,9 +604,10 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
       summary={def.successSummary ? def.successSummary(result, ctx, opts, t, lang) : null}
       onDownload={download} onDownloadAll={downloadAll}
       onBack={() => setStage("ready")} onRestart={() => switchToolResetSame()}
-      continuationActions={continuationActions} onContinue={(next) => switchTool(next)} />
+      continuationActions={continuationActions} onContinue={continueWith} />
   );
-  else if (stage === "error") main = <ErrorView t={t} message={errMsg} onRetry={() => setStage(files.length ? "ready" : "empty")} onRestart={() => switchToolResetSame()} />;
+  else if (stage === "error") main = <ErrorView t={t} message={errMsg} onRetry={() => setStage(def.standalone || files.length ? "ready" : "empty")} onRestart={() => switchToolResetSame()} />;
+  else if (def.Main) main = <def.Main t={t} lang={lang} opts={opts} setOpts={setOpts} ctx={ctx} isCompact={isCompact} isMobile={isMobile} onToast={toast} />;
   else if (stage === "empty") main = <EmptyState t={t} tool={tool} onFiles={addFiles} onSample={addSample} acceptImages={def.acceptImages} />;
   else if (def.view === "preview") main = (
     <DocPreview
@@ -625,12 +650,12 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   function switchToolResetSame() {
     PdfEngine.reset(); PdfProcess.clearCache();
     setFiles([]); setPages([]); setSelection(new Set());
-    setOpts(def.defaults); setResult(null); setStage("empty");
+    setOpts(def.defaults); setResult(null); setStage(def.standalone ? "ready" : "empty");
     undoStack.current = [];
   }
 
   const showInspector = (stage === "ready") && def.Panel;
-  const sidebarPanel = stage !== "done" && stage !== "error" ? (
+  const sidebarPanel = !def.standalone && stage !== "done" && stage !== "error" ? (
     <Sidebar t={t} lang={lang} files={files} recent={recent}
       onAdd={addFiles} onSample={addSample} onRemove={removeFile} onMoveFile={moveFile}
       stage={stage} progress={progress} acceptImages={def.acceptImages}
@@ -662,14 +687,14 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
       </div>
     </section>
   ) : null;
-  const compactReadyMain = activeCompactPanel === "files"
+  const compactReadyMain = activeCompactPanel === "files" && sidebarPanel
     ? sidebarPanel
     : activeCompactPanel === "settings" && settingsPanel
       ? settingsPanel
       : main;
   const tabs = [
-    ["files", t.workspaceTabs.files],
-    ["pages", t.workspaceTabs.pages],
+    ...(def.standalone ? [] : [["files", t.workspaceTabs.files]]),
+    ["pages", def.standalone ? t.workspaceTabs.editor : t.workspaceTabs.pages],
     ...(showInspector ? [["settings", t.workspaceTabs.settings]] : []),
   ];
   const compactPanelId = `workspace-panel-${activeCompactPanel}`;
@@ -700,16 +725,22 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     if (!event.dataTransfer?.files?.length) return;
     event.preventDefault();
     setWorkspaceDrag(false);
+    if (def.standalone) {
+      if (def.acceptDroppedFile) def.acceptDroppedFile([...event.dataTransfer.files], { setOpts, toast, lang });
+      return;
+    }
     addFiles(event.dataTransfer.files);
   };
 
   React.useEffect(() => {
     if (stage !== "ready") {
-      setActiveCompactPanel("files");
+      setActiveCompactPanel(def.standalone ? "pages" : "files");
+    } else if (def.standalone && activeCompactPanel === "files") {
+      setActiveCompactPanel("pages");
     } else if (isCompact && activeCompactPanel === "settings" && !showInspector) {
       setActiveCompactPanel("pages");
     }
-  }, [activeCompactPanel, isCompact, showInspector, stage]);
+  }, [activeCompactPanel, def.standalone, isCompact, showInspector, stage]);
 
   React.useEffect(() => {
     if (!isMobile) setMobileSheet(null);
@@ -741,7 +772,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
             <div className="ws-ready-summary" style={{ display: "flex", alignItems: "center", gap: 10, padding: isCompact ? "10px 14px 0" : "10px 24px 0" }}>
               <div className="ws-ready-summary__title">
                 <strong>{t.toolNames[tool]}</strong>
-                <span>{livePages.length} {t.success.pages}</span>
+                {!def.standalone && <span>{livePages.length} {t.success.pages}</span>}
               </div>
               <PrivacyPill lang={lang} />
               {selectable && (
@@ -812,7 +843,7 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
         {isMobile && stage === "ready" && (
           <div className="ws-mobile-actions" aria-label={lang === "id" ? "Aksi workspace" : "Workspace actions"}>
             <div className="ws-mobile-actions__tools">
-              <Button variant="secondary" size="sm" fullWidth onClick={() => setMobileSheet("files")}>{t.workspaceTabs.files}</Button>
+              {!def.standalone && <Button variant="secondary" size="sm" fullWidth onClick={() => setMobileSheet("files")}>{t.workspaceTabs.files}</Button>}
               {showInspector && <Button variant="secondary" size="sm" fullWidth onClick={() => setMobileSheet("settings")}>{t.workspaceTabs.settings}</Button>}
             </div>
             {showInspector && processAction}

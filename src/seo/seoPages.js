@@ -94,6 +94,17 @@ const toolSeoCopy = {
       ["Apakah prosesnya lokal?", "Ya. File diproses di browser untuk alat inti PDFin."],
     ],
   },
+  md2pdf: {
+    title: "Markdown ke PDF online privat | PDFin",
+    h1: "Ubah Markdown ke PDF di browser",
+    description: "Tulis atau tempel Markdown dengan pratinjau langsung, lalu unduh sebagai PDF. Teks diproses di perangkat Anda tanpa unggah.",
+    intro: "Ubah catatan, dokumentasi, atau README Markdown menjadi PDF rapi dengan pratinjau langsung, tanpa memindahkan teks dari perangkat Anda.",
+    howItWorks: ["Tulis, tempel, atau buka file Markdown.", "Periksa hasilnya lewat pratinjau langsung.", "Atur ukuran halaman lalu unduh PDF."],
+    faq: [
+      ["Apakah teks saya diunggah?", "Tidak. Markdown diubah menjadi PDF langsung di browser Anda."],
+      ["Sintaks Markdown apa yang didukung?", "Judul, teks tebal dan miring, daftar, tabel, kutipan, blok kode, tautan, dan garis pemisah."],
+    ],
+  },
   pagenum: {
     title: "Tambah nomor halaman PDF online | PDFin",
     h1: "Tambahkan nomor halaman PDF",

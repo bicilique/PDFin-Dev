@@ -235,6 +235,15 @@ describe("WorkspaceApp canonical runtime", () => {
       tool: "merge",
       file_count: 2,
       page_count: 4,
+      file_type: "pdf",
+      file_size_bucket: "0-10MB",
+    })));
+    await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("file_upload", expect.objectContaining({
+      tool: "merge",
+      file_count: 2,
+      page_count: 4,
+      file_type: "pdf",
+      file_size_bucket: "0-10MB",
     })));
     expect(JSON.stringify(trackPdfEvent.mock.calls)).not.toMatch(/first\.pdf|second\.pdf|pdf-a|pdf-b/i);
 
@@ -244,6 +253,15 @@ describe("WorkspaceApp canonical runtime", () => {
       tool: "merge",
       file_count: 2,
       page_count: 4,
+    })));
+    await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("pdf_convert_success", expect.objectContaining({
+      tool: "merge",
+      file_count: 2,
+      page_count: 4,
+      output_count: 1,
+      duration_ms: expect.any(Number),
+      file_type: "pdf",
+      file_size_bucket: "0-10MB",
     })));
     await waitFor(() => expect(trackPdfEvent).toHaveBeenCalledWith("pdf_process_completed", expect.objectContaining({
       tool: "merge",
@@ -260,6 +278,15 @@ describe("WorkspaceApp canonical runtime", () => {
       tool: "merge",
       output_count: 1,
       page_count: 4,
+      file_type: "pdf",
+      file_size_bucket: "0-10MB",
+    }));
+    expect(trackPdfEvent).toHaveBeenCalledWith("pdf_download", expect.objectContaining({
+      tool: "merge",
+      output_count: 1,
+      page_count: 4,
+      file_type: "pdf",
+      file_size_bucket: "0-10MB",
     }));
   });
 
@@ -1329,7 +1356,7 @@ describe("WorkspaceApp canonical runtime", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /halaman berikutnya/i }));
     await waitFor(() => expect(screen.getByLabelText(/ke halaman/i)).toHaveValue("2"));
-    expect(screen.getByText(/akan ditempatkan di halaman 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/akan ditempatkan di.*halaman 2/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tambahkan ke halaman ini/i }));
     expect(screen.getByRole("button", { name: /halaman 2.*paraf 1/i })).toBeInTheDocument();
@@ -1346,7 +1373,7 @@ describe("WorkspaceApp canonical runtime", () => {
     const [, opts] = PdfProcess.sign.mock.calls.at(-1);
     expect(opts.outputName).toBe("contract-diparaf.pdf");
     expect(opts.placements).toHaveLength(1);
-    expect(opts.placements[0].pageIndex).toBe(1);
+    expect(opts.placements[0].srcIndex).toBe(1);
     expect(opts.placements[0].rect.x).toBeGreaterThanOrEqual(0);
     expect(opts.placements[0].rect.w).toBeGreaterThan(0.28);
   });

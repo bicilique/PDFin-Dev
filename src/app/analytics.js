@@ -8,6 +8,8 @@ const SAFE_EVENT_PARAMS = new Set([
   "output_count",
   "duration_ms",
   "error_category",
+  "file_type",
+  "file_size_bucket",
 ]);
 
 function sanitizeParams(params = {}) {

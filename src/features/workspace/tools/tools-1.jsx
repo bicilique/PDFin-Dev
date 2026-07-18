@@ -2,6 +2,9 @@ import React from "react";
 import { Alert, Button, Input, splitModeIcons } from "../../../components/index.js";
 import { PdfEngine } from "../engine/pdfEngine.js";
 import { PdfProcess } from "../engine/pdfProcess.js";
+import { sanitizePdfBaseName, getOutputNameError, getPdfOutputName, previewBatchNames } from "../engine/outputName.js";
+
+export { sanitizePdfBaseName, getOutputNameError, getPdfOutputName };
 
 // PDFin workspace — tool defs part 1: shared inspector helpers + merge, split, organize, rotate, compress.
 
@@ -84,26 +87,12 @@ export function SelCount({ t, n }) {
 
 export const TX = (lang, id, en) => (lang === "id" ? id : en);
 
-export function sanitizePdfBaseName(raw) {
-  return String(raw || "")
-    .trim()
-    .replace(/(?:\.pdf)+$/i, "")
-    .replace(/[/\\:*?"<>|]+/g, "-")
-    .replace(/\s+/g, " ")
-    .replace(/[-\s]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .trim();
+export function sourceBaseName(ctx, fallback = "dokumen") {
+  return sanitizePdfBaseName(ctx.files[0]?.name || fallback) || fallback;
 }
 
-export function getOutputNameError(raw, lang) {
-  return sanitizePdfBaseName(raw)
-    ? ""
-    : TX(lang, "Nama file tidak boleh kosong.", "File name cannot be empty.");
-}
-
-export function getPdfOutputName(raw, lang) {
-  const base = sanitizePdfBaseName(raw) || TX(lang, "hasil-gabungan", "merged");
-  return `${base}.pdf`;
+export function outputNameValue(ctx, suffix) {
+  return `${sourceBaseName(ctx)}-${suffix}`;
 }
 
 export function parsePageRange(range, pageCount, lang = "id", allowEmpty = false) {
@@ -268,52 +257,9 @@ TOOL_DEFS.merge = {
     return t.toolRequirements.merge;
   },
   outName: (lang, opts = {}) => getPdfOutputName(opts.outputName, lang),
-  ActionFields: ({ lang, opts, setOpts }) => {
-    const error = getOutputNameError(opts.outputName, lang);
-    const inputId = "merge-output-name";
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label htmlFor={inputId} style={{ font: "var(--type-label)", color: "var(--text-heading)" }}>
-          {TX(lang, "Nama file hasil", "Output file name")}
-        </label>
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          border: `1px solid ${error ? "var(--red-600)" : "var(--border-default)"}`,
-          borderRadius: "var(--radius-md)",
-          background: "var(--surface-card)",
-          overflow: "hidden",
-        }}>
-          <input
-            id={inputId}
-            aria-invalid={!!error}
-            aria-describedby={error ? `${inputId}-error` : undefined}
-            value={opts.outputName}
-            onChange={(e) => setOpts((next) => ({ ...next, outputName: e.target.value }))}
-            style={{
-              minWidth: 0,
-              flex: 1,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              color: "var(--text-heading)",
-              font: "var(--type-body)",
-              padding: "9px 10px 9px 12px",
-            }}
-          />
-          <span aria-hidden="true" style={{
-            flex: "none",
-            borderLeft: "1px solid var(--border-default)",
-            background: "var(--surface-sunken)",
-            color: "var(--text-muted)",
-            font: "var(--type-caption)",
-            padding: "10px 11px",
-          }}>.pdf</span>
-        </div>
-        {error && <span id={`${inputId}-error`} style={{ font: "var(--type-caption)", color: "var(--status-error-fg)" }}>{error}</span>}
-      </div>
-    );
-  },
+  ActionFields: ({ lang, opts, setOpts }) => (
+    <OutputNameField lang={lang} value={opts.outputName} onChange={(outputName) => setOpts((next) => ({ ...next, outputName }))} inputId="merge-output-name" />
+  ),
   Panel: ({ t, lang, ctx }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Alert tone="info">{TX(lang,
@@ -342,11 +288,12 @@ TOOL_DEFS.merge = {
 
 TOOL_DEFS.split = {
   view: "grid",
-  defaults: { mode: "every", n: 2, range: "1-3" },
+  defaults: { mode: "every", n: 2, range: "1-3", outputName: "", loadedFor: null },
   selectableWhen: (opts) => opts.mode === "selected",
   disabled: (ctx, opts, lang = "id") => {
     const live = ctx.pages.filter((p) => !p.deleted);
     if (!live.length) return true;
+    if (getOutputNameError(opts.outputName || sourceBaseName(ctx), lang)) return true;
     if (opts.mode === "range") return !!analyzeSplitRange(opts.range, live.length, lang).error;
     if (opts.mode === "selected") return ctx.selection.size === 0;
     return false;
@@ -354,6 +301,8 @@ TOOL_DEFS.split = {
   disabledReason: (ctx, opts, t, lang) => {
     const live = ctx.pages.filter((p) => !p.deleted);
     if (!live.length) return t.toolRequirements.split;
+    const outputError = getOutputNameError(opts.outputName || sourceBaseName(ctx), lang);
+    if (outputError) return outputError;
     if (opts.mode === "range") return analyzeSplitRange(opts.range, live.length, lang).error || t.toolRequirements.split;
     if (opts.mode === "selected" && ctx.selection.size === 0) {
       return TX(lang, "Pilih minimal 1 halaman untuk dipisahkan.", "Select at least 1 page to split.");
@@ -370,6 +319,14 @@ TOOL_DEFS.split = {
   Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const live = ctx.pages.filter((p) => !p.deleted);
     const plan = getSplitPlan(ctx, opts, lang);
+    const file = ctx.files[0];
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: sourceBaseName(ctx), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field label={TX(lang, "Cara memisah", "Split method")}>
@@ -390,6 +347,9 @@ TOOL_DEFS.split = {
             <span style={{ font: "11px/1.4 var(--font-sans)", color: "var(--text-faint)" }}>{TX(lang, "Gunakan checkbox di grid halaman untuk memilih.", "Use checkboxes in the page grid to select.")}</span>
           </Field>
         )}
+        <OutputNameField lang={lang} value={opts.outputName || sourceBaseName(ctx)}
+          onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="split-output-name"
+          batchCount={Math.max(1, plan.outputCount)} />
         <Field label={t.inspector.output}>
           <span style={{ font: "12.5px/1.45 var(--font-mono)", color: plan.error ? "var(--status-error-fg)" : "var(--text-muted)" }}>
             {plan.summary}
@@ -403,19 +363,19 @@ TOOL_DEFS.split = {
     return TX(lang, `${files} file PDF dibuat.`, `${files} PDF file${files === 1 ? "" : "s"} created.`);
   },
   process: (ctx, opts, onP, lang) => {
-    const base = (ctx.files[0] ? ctx.files[0].name.replace(/\.pdf$/i, "") : "hasil");
+    const base = opts.outputName || sourceBaseName(ctx);
     return PdfProcess.split(ctx.pages, { ...opts, selected: ctx.selection }, base, onP);
   },
 };
 
 TOOL_DEFS.organize = {
   view: "grid", selectable: true, reorder: true, pageActions: true, undoable: true,
-  defaults: {},
+  defaults: { outputName: "", loadedFor: null },
   nextAction: (ctx, opts, t, lang) => {
     const pages = ctx.pages.filter((p) => !p.deleted).length;
     return TX(lang, `Susun ${pages} halaman, lalu proses PDF baru.`, `Arrange ${pages} page${pages === 1 ? "" : "s"}, then process the new PDF.`);
   },
-  Panel: ({ t, lang, ctx }) => {
+  Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const sel = [...ctx.selection];
     const any = sel.length > 0;
     const duplicateLabel = sel.length <= 1
@@ -424,6 +384,14 @@ TOOL_DEFS.organize = {
     const B = ({ children, onClick, danger, disabled }) => (
       <Button variant={danger ? "danger" : "secondary"} size="sm" fullWidth disabled={disabled} onClick={onClick}>{children}</Button>
     );
+    const file = ctx.files[0];
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: outputNameValue(ctx, "tersusun"), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field label={TX(lang, "Halaman terpilih", "Selected pages")}><SelCount t={t} n={sel.length} /></Field>
@@ -435,27 +403,37 @@ TOOL_DEFS.organize = {
             <B danger onClick={() => ctx.pageOps.remove(sel)}>{t.pageMenu.delete}</B>
           </div>
         )}
+        <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "tersusun")}
+          onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="organize-output-name" />
         <Alert tone="info">{TX(lang,
           "Tarik kartu halaman untuk menyusun ulang. Klik kanan untuk menu aksi.",
           "Drag page cards to reorder. Right-click for actions.")}</Alert>
       </div>
     );
   },
-  disabled: (ctx) => ctx.pages.filter((p) => !p.deleted).length === 0,
-  outName: (lang) => TX(lang, "halaman-tersusun.pdf", "organized.pdf"),
+  disabled: (ctx, opts, lang = "id") => ctx.pages.filter((p) => !p.deleted).length === 0 || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "tersusun"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "tersusun"), lang) || t.toolRequirements.organize,
   successSummary: (result, ctx, opts, t, lang) => {
     const pages = result.outputs.reduce((sum, output) => sum + (output.pages || 0), 0);
     return TX(lang, `${pages} halaman disimpan sesuai urutan pratinjau.`, `${pages} page${pages === 1 ? "" : "s"} saved in the preview order.`);
   },
-  process: (ctx, opts, onP, lang) => PdfProcess.assemble(ctx.pages, TOOL_DEFS.organize.outName(lang), onP),
+  process: (ctx, opts, onP, lang) => PdfProcess.assemble(ctx.pages, getPdfOutputName(opts.outputName || outputNameValue(ctx, "tersusun"), lang), onP),
 };
 
 TOOL_DEFS.rotate = {
   view: "grid", selectable: true,
-  defaults: {},
-  Panel: ({ t, lang, ctx }) => {
+  defaults: { outputName: "", loadedFor: null },
+  Panel: ({ t, lang, opts, setOpts, ctx }) => {
     const sel = [...ctx.selection];
     const all = ctx.pages.filter((p) => !p.deleted).map((p) => p.uid);
+    const file = ctx.files[0];
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((next) => next.loadedFor === file.id ? next : {
+          ...next, outputName: outputNameValue(ctx, "putar"), loadedFor: file.id,
+        });
+      }
+    }, [file?.id]);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field label={TX(lang, "Halaman terpilih", "Selected pages")}><SelCount t={t} n={sel.length} /></Field>
@@ -469,13 +447,15 @@ TOOL_DEFS.rotate = {
             <Button variant="ghost" size="sm" onClick={() => ctx.pageOps.rotate(all, 90)}>↻ {TX(lang, "Semua", "All")}</Button>
           </div>
         </Field>
+        <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "putar")}
+          onChange={(outputName) => setOpts({ ...opts, outputName })} inputId="rotate-output-name" />
         <Alert tone="info">{TX(lang, "Rotasi diterapkan permanen saat diproses.", "Rotation is applied permanently on process.")}</Alert>
       </div>
     );
   },
-  disabled: (ctx) => !ctx.pages.some((p) => !p.deleted && p.rotation),
-  outName: (lang) => TX(lang, "hasil-putar.pdf", "rotated.pdf"),
-  process: (ctx, opts, onP, lang) => PdfProcess.assemble(ctx.pages, TOOL_DEFS.rotate.outName(lang), onP),
+  disabled: (ctx, opts, lang = "id") => !ctx.pages.some((p) => !p.deleted && p.rotation) || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "putar"), lang),
+  disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "putar"), lang) || t.toolRequirements.rotate,
+  process: (ctx, opts, onP, lang) => PdfProcess.assemble(ctx.pages, getPdfOutputName(opts.outputName || outputNameValue(ctx, "putar"), lang), onP),
 };
 
 TOOL_DEFS.compress = {
@@ -537,13 +517,23 @@ TOOL_DEFS.compress = {
   process: (ctx, opts, onP, lang) => PdfProcess.compress(ctx.pages, opts, TOOL_DEFS.compress.outName(lang, opts), onP),
 };
 
-export function OutputNameField({ lang, value, onChange, inputId }) {
-  const error = getOutputNameError(value, lang);
+export function OutputNameField({ lang, value, onChange, inputId, label, extension = "pdf", batchCount = 1, error: errorProp }) {
+  const error = errorProp !== undefined ? errorProp : getOutputNameError(value, lang);
+  const batch = batchCount > 1;
+  const preview = batch ? previewBatchNames(value, batchCount, extension) : null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label htmlFor={inputId} style={{ font: "var(--type-label)", color: "var(--text-heading)" }}>
-        {TX(lang, "Nama file hasil", "Output file name")}
-      </label>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label htmlFor={inputId} style={{ font: "var(--type-label)", color: "var(--text-heading)" }}>
+          {label || TX(lang, "Nama file hasil", "Output file name")}
+        </label>
+        {batch && (
+          <span style={{
+            font: "var(--type-caption)", color: "var(--text-body)", background: "var(--surface-sunken)",
+            borderRadius: "var(--radius-pill)", padding: "2px 8px",
+          }}>{TX(lang, `× ${batchCount} file`, `× ${batchCount} files`)}</span>
+        )}
+      </div>
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -576,9 +566,14 @@ export function OutputNameField({ lang, value, onChange, inputId }) {
           color: "var(--text-muted)",
           font: "var(--type-caption)",
           padding: "10px 11px",
-        }}>.pdf</span>
+        }}>.{extension}</span>
       </div>
-      {error && <span id={`${inputId}-error`} style={{ font: "var(--type-caption)", color: "var(--status-error-fg)" }}>{error}</span>}
+      {error && <span id={`${inputId}-error`} role="alert" style={{ font: "var(--type-caption)", color: "var(--status-error-fg)" }}>{error}</span>}
+      {!error && batch && (
+        <span style={{ font: "11px/1.4 var(--font-sans)", color: "var(--text-faint)" }}>
+          {TX(lang, `Contoh: ${preview.join(", ")}${batchCount > preview.length ? "…" : ""}`, `Example: ${preview.join(", ")}${batchCount > preview.length ? "…" : ""}`)}
+        </span>
+      )}
     </div>
   );
 }

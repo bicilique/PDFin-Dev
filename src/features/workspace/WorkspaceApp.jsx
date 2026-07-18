@@ -2,6 +2,7 @@ import React from "react";
 import { Badge, Button, IconButton, MobileBottomSheet, Modal, PrivacyPill, Toast, ZoomControl } from "../../components/index.js";
 import { trackPdfEvent } from "../../app/analytics.js";
 import { applyTheme, getInitialTheme, migrateLegacyThemePreference, persistExplicitTheme } from "../../app/theme.js";
+import { getPersistedLang, persistLangPreference } from "../../app/locale.js";
 import { getToolFromHash, getToolFromPath, getToolHref } from "../../app/toolRoutes.js";
 import { PDFIN_T } from "./i18n.js";
 import { PdfEngine } from "./engine/pdfEngine.js";
@@ -42,6 +43,34 @@ function workspaceAnalyticsPayload(tool, files = [], pages = [], extras = {}) {
     file_count: files.length,
     page_count: pages.length || countPages(files),
     ...extras,
+  };
+}
+
+function inferFileType(files = []) {
+  if (!files.length) return "unknown";
+  const hasImage = files.some((file) => file.isImage);
+  const hasPdf = files.some((file) => !file.isImage);
+  if (hasImage && hasPdf) return "mixed";
+  return hasImage ? "image" : "pdf";
+}
+
+function fileSizeBucketFromBytes(totalBytes = 0) {
+  const bytes = Math.max(0, Number(totalBytes) || 0);
+  const tenMB = 10 * 1024 * 1024;
+  const fiftyMB = 50 * 1024 * 1024;
+
+  if (bytes >= fiftyMB) return "50MB+";
+  if (bytes >= tenMB) return "10-50MB";
+  return "0-10MB";
+}
+
+function fileBatchSummary(files = []) {
+  const totalBytes = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+  return {
+    file_type: inferFileType(files),
+    file_size_bucket: fileSizeBucketFromBytes(totalBytes),
+    file_count: files.length,
+    page_count: countPages(files),
   };
 }
 
@@ -116,8 +145,8 @@ function SplitSelectionToolbar({ lang, selectedCount, totalCount, onSelectAll, o
   );
 }
 
-export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHome }) {
-  const [lang, setLang] = React.useState(localStorage.getItem("pdfin-ws-lang") || initialLang);
+export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHome, onLangChange }) {
+  const [lang, setLang] = React.useState(getPersistedLang() || initialLang);
   const [theme, setTheme] = React.useState(() => getInitialTheme(initialTheme));
   const [tool, setTool] = React.useState(hashTool());
   const [files, setFiles] = React.useState([]);
@@ -168,8 +197,12 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   React.useEffect(() => {
     applyTheme(theme);
     document.documentElement.setAttribute("lang", lang);
-    localStorage.setItem("pdfin-ws-lang", lang);
+    persistLangPreference(lang);
   }, [theme, lang]);
+
+  React.useEffect(() => {
+    onLangChange?.(lang);
+  }, [onLangChange, lang]);
 
   React.useEffect(() => {
     migrateLegacyThemePreference();
@@ -302,10 +335,14 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
     }
 
     if (readyBatch.length) {
+      const uploadSummary = fileBatchSummary(readyBatch);
       trackPdfEvent("pdf_file_selected", {
         tool,
-        file_count: readyBatch.length,
-        page_count: countPages(readyBatch),
+        ...uploadSummary,
+      });
+      trackPdfEvent("file_upload", {
+        tool,
+        ...uploadSummary,
       });
       const toolIds = [tool, ...recent.filter((id) => id !== tool)].slice(0, 6);
       setRecent(toolIds);
@@ -482,7 +519,14 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
       if (def.afterProcessOpts) setOpts((current) => def.afterProcessOpts(current, res));
       const durationMs = performance.now() - t0;
       setResult({ ...res, ms: durationMs });
+      const convertSummary = fileBatchSummary(validFiles);
       trackPdfEvent("pdf_process_completed", workspaceAnalyticsPayload(tool, validFiles, pages, {
+        output_count: res.outputs?.length || 0,
+        duration_ms: durationMs,
+        ...convertSummary,
+      }));
+      trackPdfEvent("pdf_convert_success", workspaceAnalyticsPayload(tool, validFiles, pages, {
+        ...convertSummary,
         output_count: res.outputs?.length || 0,
         duration_ms: durationMs,
       }));
@@ -515,9 +559,20 @@ export function WorkspaceApp({ initialLang = "id", initialTheme = "light", onHom
   };
 
   const download = (o) => {
+    const outputPayload = fileBatchSummary(validFiles);
     trackPdfEvent("pdf_download_clicked", workspaceAnalyticsPayload(tool, validFiles, pages, {
       output_count: 1,
       page_count: Number(o.pages) || pages.length || countPages(validFiles),
+      ...outputPayload,
+      file_size_bucket: fileSizeBucketFromBytes(Number(o.size) || 0),
+      file_type: "pdf",
+    }));
+    trackPdfEvent("pdf_download", workspaceAnalyticsPayload(tool, validFiles, pages, {
+      output_count: 1,
+      page_count: Number(o.pages) || pages.length || countPages(validFiles),
+      ...outputPayload,
+      file_size_bucket: fileSizeBucketFromBytes(Number(o.size) || 0),
+      file_type: "pdf",
     }));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(o.blob);

@@ -16,6 +16,7 @@ import {
 import { PdfEngine } from "./pdfEngine.js";
 import { createTesseractOcrEngine } from "./ocrEngine.js";
 import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
+import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
 
 // PDFin workspace — real PDF processing via pdf-lib (+ pdf.js rendering for raster ops).
 // All functions return { outputs: [{ name, blob, size, pages }] }.
@@ -173,6 +174,8 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
   }
 
   async function split(pages, opts, baseName, onProgress) {
+    const base = sanitizePdfBaseName(baseName) || "hasil";
+    const dedupe = createNameDeduper();
     const live = pages.filter((p) => !p.deleted);
     const groups = [];
     if (opts.mode === "every") {
@@ -198,7 +201,7 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
         done++; if (onProgress) onProgress((done / total) * 95);
       }
       const suffix = groups.length > 1 ? "-" + String(g + 1) : opts.mode === "range" ? "-" + opts.range.replace(/[^0-9,-]/g, "") : "-halaman";
-      outputs.push(out(baseName + suffix + ".pdf", await doc.save(), groups[g].length));
+      outputs.push(out(dedupe(base + suffix + ".pdf"), await doc.save(), groups[g].length));
       await tick();
     }
     if (onProgress) onProgress(100);
@@ -264,6 +267,8 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
   async function watermark(files, opts, onProgress) {
     const { PDFDocument, StandardFonts, degrees, rgb } = P();
     const outputs = [];
+    const customBase = opts.outputName ? sanitizePdfBaseName(opts.outputName) : "";
+    const dedupe = createNameDeduper();
     for (let f = 0; f < files.length; f++) {
       const doc = await PDFDocument.load(E().files.get(files[f].id).bytes, { ignoreEncryption: true });
       const font = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -295,8 +300,11 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
         }
         if (onProgress) onProgress(((f + (i + 1) / pagesArr.length) / files.length) * 95);
       }
-      const base = files[f].name.replace(/\.pdf$/i, "");
-      outputs.push(out(base + "-watermark.pdf", await doc.save(), pagesArr.length));
+      const fallbackBase = sanitizePdfBaseName(files[f].name) || `dokumen-${f + 1}`;
+      const name = customBase
+        ? (files.length > 1 ? `${customBase}-${f + 1}.pdf` : `${customBase}.pdf`)
+        : `${fallbackBase}-watermark.pdf`;
+      outputs.push(out(dedupe(name), await doc.save(), pagesArr.length));
       await tick();
     }
     if (onProgress) onProgress(100);
@@ -338,6 +346,8 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
   }
 
   async function pdfToImages(pages, opts, baseName, onProgress) {
+    const base = sanitizePdfBaseName(baseName) || "halaman";
+    const dedupe = createNameDeduper();
     const live = pages.filter((p) => !p.deleted && (!opts.selected || !opts.selected.size || opts.selected.has(p.uid)));
     const outputs = [];
     const scaleW = (opts.dpi / 72) * 595; // approx A4 width at dpi
@@ -345,7 +355,7 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
       const canvas = await E().renderPage(live[i].fileId, live[i].srcIndex + 1, scaleW / 2);
       const mime = opts.format === "png" ? "image/png" : "image/jpeg";
       const blob = await new Promise((r) => canvas.toBlob(r, mime, opts.format === "png" ? undefined : opts.quality / 100));
-      outputs.push({ name: `${baseName}-${i + 1}.${opts.format}`, blob, size: blob.size, isImage: true });
+      outputs.push({ name: dedupe(`${base}-${i + 1}.${opts.format}`), blob, size: blob.size, isImage: true });
       if (onProgress) onProgress(((i + 1) / live.length) * 96);
       await tick();
     }
@@ -358,6 +368,8 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
     const fonts = { helvetica: StandardFonts.Helvetica, times: StandardFonts.TimesRoman, courier: StandardFonts.Courier };
     const colors = { ink: rgb(0.17, 0.14, 0.3), gray: rgb(0.55, 0.53, 0.65), violet: rgb(0.33, 0.09, 0.71) };
     const outputs = [];
+    const customBase = opts.outputName ? sanitizePdfBaseName(opts.outputName) : "";
+    const dedupe = createNameDeduper();
     for (let f = 0; f < files.length; f++) {
       const doc = await PDFDocument.load(E().files.get(files[f].id).bytes, { ignoreEncryption: true });
       const font = await doc.embedFont(fonts[opts.font] || fonts.helvetica);
@@ -376,8 +388,11 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
         page.drawText(label, { x, y, size: opts.fontSize, font, color: colors[opts.color] || colors.ink });
         if (onProgress) onProgress(((f + (i + 1) / pagesArr.length) / files.length) * 95);
       });
-      const base = files[f].name.replace(/\.pdf$/i, "");
-      outputs.push(out(base + "-bernomor.pdf", await doc.save(), pagesArr.length));
+      const fallbackBase = sanitizePdfBaseName(files[f].name) || `dokumen-${f + 1}`;
+      const name = customBase
+        ? (files.length > 1 ? `${customBase}-${f + 1}.pdf` : `${customBase}.pdf`)
+        : `${fallbackBase}-bernomor.pdf`;
+      outputs.push(out(dedupe(name), await doc.save(), pagesArr.length));
       await tick();
     }
     if (onProgress) onProgress(100);
@@ -387,6 +402,8 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
   async function flatten(files, opts, onProgress) {
     const { PDFDocument } = P();
     const outputs = [];
+    const customBase = opts.outputName ? sanitizePdfBaseName(opts.outputName) : "";
+    const dedupe = createNameDeduper();
     for (let f = 0; f < files.length; f++) {
       const doc = await PDFDocument.load(E().files.get(files[f].id).bytes, { ignoreEncryption: true });
       if (opts.forms) {
@@ -397,8 +414,11 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
         // Keep annotations intact rather than deleting review/comment data.
       }
       if (onProgress) onProgress(((f + 1) / files.length) * 90);
-      const base = files[f].name.replace(/\.pdf$/i, "");
-      outputs.push(out(base + "-flat.pdf", await doc.save(), doc.getPageCount()));
+      const fallbackBase = sanitizePdfBaseName(files[f].name) || `dokumen-${f + 1}`;
+      const name = customBase
+        ? (files.length > 1 ? `${customBase}-${f + 1}.pdf` : `${customBase}.pdf`)
+        : `${fallbackBase}-flat.pdf`;
+      outputs.push(out(dedupe(name), await doc.save(), doc.getPageCount()));
       await tick();
     }
     if (onProgress) onProgress(100);
@@ -434,32 +454,53 @@ import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
 
   async function sign(files, opts, onProgress) {
     const { PDFDocument } = P();
-    const doc = await PDFDocument.load(E().files.get(files[0].id).bytes, { ignoreEncryption: true });
     const placements = opts.placements || [];
-    for (let i = 0; i < placements.length; i++) {
-      const placement = placements[i];
-      const bytes = placement.source?.bytes;
-      if (!bytes) continue;
-      const image = placement.source?.type === "image/jpeg"
-        ? await doc.embedJpg(bytes)
-        : await doc.embedPng(bytes);
-      const page = doc.getPage(placement.pageIndex);
-      const { width, height } = page.getSize();
-      const rect = placement.rect || { x: 0.36, y: 0.72, w: 0.28 };
-      const w = rect.w * width;
-      const h = w * (image.height / image.width);
-      page.drawImage(image, {
-        x: Math.min(width - w, Math.max(0, rect.x * width)),
-        y: Math.min(height - h, Math.max(0, height - rect.y * height - h)),
-        width: w,
-        height: h,
-      });
-      if (onProgress) onProgress(((i + 1) / Math.max(1, placements.length)) * 90);
+    // Files without their own placements inherit the placement set of the
+    // first file (in `files` order) that has one, mapped onto the same
+    // page index (clamped to that file's own page count).
+    const templateFile = files.find((f) => placements.some((pl) => pl.fileId === f.id));
+    const templateFileId = templateFile?.id;
+    const customBase = opts.outputName ? sanitizePdfBaseName(opts.outputName) : "";
+    const dedupe = createNameDeduper();
+    const outputs = [];
+    for (let f = 0; f < files.length; f++) {
+      const file = files[f];
+      const doc = await PDFDocument.load(E().files.get(file.id).bytes, { ignoreEncryption: true });
+      const pageCount = doc.getPageCount();
+      let filePlacements = placements.filter((pl) => pl.fileId === file.id);
+      if (!filePlacements.length && templateFileId) {
+        filePlacements = placements
+          .filter((pl) => pl.fileId === templateFileId)
+          .map((pl) => ({ ...pl, srcIndex: Math.min(pl.srcIndex, Math.max(0, pageCount - 1)) }));
+      }
+      for (let i = 0; i < filePlacements.length; i++) {
+        const placement = filePlacements[i];
+        const bytes = placement.source?.bytes;
+        if (!bytes) continue;
+        const image = placement.source?.type === "image/jpeg"
+          ? await doc.embedJpg(bytes)
+          : await doc.embedPng(bytes);
+        const page = doc.getPage(Math.min(placement.srcIndex, pageCount - 1));
+        const { width, height } = page.getSize();
+        const rect = placement.rect || { x: 0.36, y: 0.72, w: 0.28 };
+        const w = rect.w * width;
+        const h = w * (image.height / image.width);
+        page.drawImage(image, {
+          x: Math.min(width - w, Math.max(0, rect.x * width)),
+          y: Math.min(height - h, Math.max(0, height - rect.y * height - h)),
+          width: w,
+          height: h,
+        });
+      }
+      if (onProgress) onProgress(((f + 1) / files.length) * 90);
+      const fallbackBase = sanitizePdfBaseName(file.name) || `dokumen-${f + 1}`;
+      const name = customBase
+        ? (files.length > 1 ? `${customBase}-${f + 1}.pdf` : `${customBase}.pdf`)
+        : `${fallbackBase}-diparaf.pdf`;
+      outputs.push(out(dedupe(name), await doc.save(), pageCount));
     }
-    const base = files[0].name.replace(/\.pdf$/i, "");
-    const res = { outputs: [out(opts.outputName || base + "-diparaf.pdf", await doc.save(), doc.getPageCount())] };
     if (onProgress) onProgress(100);
-    return res;
+    return { outputs };
   }
 
   async function protect(files, opts, onProgress) {

@@ -784,3 +784,118 @@ DEFS3.ocr = {
     outputName: getPdfOutputName(opts.outputName || outputNameValue(ctx, "ocr"), lang),
   }, onP),
 };
+
+DEFS3.pdf2docx = {
+  view: "preview",
+  previewKind: "content",
+  selectable: false,
+  defaults: {
+    ocrMode: "auto",
+    language: "ind+eng",
+    quality: "accurate",
+    outputName: "",
+    loadedFor: null,
+    sourceEncrypted: false,
+  },
+  Panel: ({ t, lang, opts, setOpts, ctx }) => {
+    const file = ctx.files[0];
+    const live = ctx.pages.filter((page) => !page.deleted);
+    React.useEffect(() => {
+      if (file?.id && opts.loadedFor !== file.id) {
+        setOpts((current) => current.loadedFor === file.id ? current : {
+          ...current,
+          outputName: outputNameValue(ctx, "word"),
+          loadedFor: file.id,
+          sourceEncrypted: PdfProcess.sourceHasEncryption(file.id),
+        });
+      }
+    }, [file?.id]);
+    const large = live.length >= 40 || (file?.size || 0) > 80 * 1024 * 1024;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <h3 style={{ margin: 0, font: "var(--weight-bold) 16px/1.25 var(--font-sans)", color: "var(--text-heading)" }}>
+            {TX3(lang, "PDF ke Word", "PDF to Word")}
+          </h3>
+          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>
+            {TX3(lang, "Ubah PDF menjadi DOCX yang dapat diedit dengan layout mendekati dokumen asli.", "Convert PDF into an editable DOCX while preserving the original layout.")}
+          </span>
+        </div>
+        <Alert tone="info">{TX3(lang, "File diproses sepenuhnya di perangkat Anda dan tidak diunggah.", "The file is processed entirely on your device and is not uploaded.")}</Alert>
+        <F3 label={TX3(lang, "OCR halaman pindaian", "Scanned-page OCR")}>
+          <Seg3 value={opts.ocrMode} onChange={(ocrMode) => setOpts({ ...opts, ocrMode })} options={[
+            { value: "auto", label: TX3(lang, "Otomatis", "Automatic") },
+            { value: "all", label: TX3(lang, "Paksa semua", "Force all") },
+            { value: "off", label: TX3(lang, "Nonaktif", "Off") },
+          ]} />
+          <span style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>
+            {opts.ocrMode === "auto"
+              ? TX3(lang, "PDFin mendeteksi halaman tanpa teks dan menjalankan OCR hanya saat diperlukan.", "PDFin detects pages without text and runs OCR only when needed.")
+              : opts.ocrMode === "all"
+                ? TX3(lang, "Lebih lambat dan teks PDF digital dapat menjadi kurang akurat.", "Slower, and native PDF text may become less accurate.")
+                : TX3(lang, "Halaman pindaian tanpa teks akan dipertahankan sebagai gambar.", "Scanned pages without text will be preserved as images.")}
+          </span>
+        </F3>
+        {opts.ocrMode !== "off" && (
+          <>
+            <Select label={TX3(lang, "Bahasa OCR", "OCR language")} value={opts.language} onChange={(event) => setOpts({ ...opts, language: event.target.value })}
+              options={[
+                { value: "ind+eng", label: "Indonesia + English" },
+                { value: "ind", label: "Indonesia" },
+                { value: "eng", label: "English" },
+              ]} />
+            <F3 label={TX3(lang, "Kualitas OCR", "OCR quality")}>
+              <Seg3 value={opts.quality} onChange={(quality) => setOpts({ ...opts, quality })} options={[
+                { value: "fast", label: TX3(lang, "Cepat", "Fast") },
+                { value: "balanced", label: TX3(lang, "Seimbang", "Balanced") },
+                { value: "accurate", label: TX3(lang, "Akurat", "Accurate") },
+              ]} />
+            </F3>
+          </>
+        )}
+        <OutputNameField lang={lang} value={opts.outputName || outputNameValue(ctx, "word")} inputId="pdf2docx-output-name"
+          extension="docx" onChange={(outputName) => setOpts({ ...opts, outputName })} />
+        {large && <Alert tone="warning">{TX3(lang, "Dokumen besar dapat membutuhkan waktu lama dan memori tinggi.", "Large documents can take a long time and use significant memory.")}</Alert>}
+        {opts.sourceEncrypted && <Alert tone="error">{TX3(lang, "PDF terlindungi password belum dapat dikonversi.", "Password-protected PDFs cannot be converted yet.")}</Alert>}
+      </div>
+    );
+  },
+  disabled: (ctx, opts, lang = "id") => (
+    !ctx.validFiles?.length
+    || !!ctx.loadingFiles?.length
+    || opts.sourceEncrypted
+    || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "word"), lang)
+  ),
+  disabledReason: (ctx, opts, t, lang) => {
+    if (!ctx.validFiles?.length) return t.toolRequirements.pdf2docx;
+    if (ctx.loadingFiles?.length) return TX3(lang, "Tunggu sampai file selesai dimuat.", "Wait until the file is fully loaded.");
+    if (opts.sourceEncrypted) return TX3(lang, "PDF terlindungi password belum dapat dikonversi.", "Password-protected PDFs cannot be converted yet.");
+    return getOutputNameError(opts.outputName || outputNameValue(ctx, "word"), lang) || t.cta.ready;
+  },
+  actionLabel: (ctx, opts, t, lang) => TX3(lang, "Ubah ke Word", "Convert to Word"),
+  processLabel: (t, lang) => TX3(lang, "Menganalisis dokumen…", "Analyzing document…"),
+  progressLabel: (detail, t, lang) => {
+    const phases = {
+      extract: TX3(lang, "Mengekstrak teks dan layout", "Extracting text and layout"),
+      ocr: TX3(lang, "Menjalankan OCR", "Running OCR"),
+      pack: TX3(lang, "Membuat dokumen Word", "Creating Word document"),
+      done: TX3(lang, "DOCX siap", "DOCX ready"),
+    };
+    const label = phases[detail?.phase] || TX3(lang, "Memproses dokumen", "Processing document");
+    return detail?.page && detail?.total ? `${label} — ${detail.page}/${detail.total}` : label;
+  },
+  successSummary: (result, ctx, opts, t, lang) => {
+    const native = result.conversion?.nativePages?.length || 0;
+    const ocr = result.conversion?.ocrPages?.length || 0;
+    const fallback = result.conversion?.fallbackPages?.length || 0;
+    const low = result.conversion?.lowConfidencePages?.length || 0;
+    return TX3(lang,
+      `${native} halaman teks asli, ${ocr} halaman OCR${fallback ? `, ${fallback} halaman dipertahankan sebagai gambar` : ""}${low ? `; ${low} halaman perlu diperiksa` : ""}.`,
+      `${native} native-text page${native === 1 ? "" : "s"}, ${ocr} OCR page${ocr === 1 ? "" : "s"}${fallback ? `, ${fallback} page${fallback === 1 ? "" : "s"} preserved as images` : ""}${low ? `; ${low} page${low === 1 ? "" : "s"} need review` : ""}.`);
+  },
+  process: (ctx, opts, onProgress, lang) => PdfProcess.pdfToDocx(ctx.files, {
+    ...opts,
+    pages: ctx.pages,
+    outputName: getPdfOutputName(opts.outputName || outputNameValue(ctx, "word"), lang, "docx"),
+  }, onProgress),
+};

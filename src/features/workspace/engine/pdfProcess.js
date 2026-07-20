@@ -15,6 +15,7 @@ import {
 } from "pdf-lib";
 import { PdfEngine } from "./pdfEngine.js";
 import { createTesseractOcrEngine } from "./ocrEngine.js";
+import { convertPdfToDocx } from "./pdfToDocx.js";
 import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
 import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
 
@@ -673,9 +674,13 @@ import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
     return { outputs };
   }
 
+  async function pdfToDocx(files, opts = {}, onProgress) {
+    return convertPdfToDocx(files, opts, onProgress);
+  }
+
 export const PdfProcess = {
     clearCache, assemble, split, parseRange, compress, watermark, imagesToPdf,
     pdfToImages, pageNumbers, flatten, metadata, readMetadata, sign, protect,
-    ocr, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
+    ocr, pdfToDocx, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
     sourceHasDigitalSignature, sourceHasEncryption,
   };

@@ -23,6 +23,7 @@
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/ind": "^1.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "docx": "^9.7.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "4.10.38",
     "react": "^18.3.1",
@@ -38,6 +39,7 @@
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",
+    "jszip": "^3.10.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

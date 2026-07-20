@@ -182,6 +182,17 @@ const toolSeoCopy = {
       ["Apakah hasil OCR selalu akurat?", "Tidak. Teks buram, tulisan tangan, atau pindaian berkualitas rendah tetap dapat menghasilkan kesalahan."],
     ],
   },
+  pdf2docx: {
+    title: "PDF ke Word online | PDFin",
+    h1: "PDF ke Word",
+    description: "Ubah PDF menjadi DOCX yang dapat diedit dengan deteksi OCR otomatis dan pemrosesan lokal di browser.",
+    intro: "PDF ke Word mempertahankan teks, paragraf, tabel sederhana, dan halaman pindaian tanpa mengunggah dokumen.",
+    howItWorks: ["Tambahkan satu file PDF.", "Pilih mode OCR dan bahasa dokumen.", "Unduh dokumen Word yang dapat diedit."],
+    faq: [
+      ["Apakah PDF diunggah?", "Tidak. Konversi dan OCR berjalan lokal di browser."],
+      ["Apakah halaman pindaian didukung?", "Ya. PDFin mendeteksi halaman tanpa teks dan menjalankan OCR otomatis."],
+    ],
+  },
 };
 
 const seoSlugs = {

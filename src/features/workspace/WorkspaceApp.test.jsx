@@ -157,6 +157,26 @@ vi.mock("./engine/pdfProcess.js", () => ({
         },
       };
     }),
+    pdfToDocx: vi.fn(async (files, opts, onProgress) => {
+      onProgress(100, { phase: "done", page: 2, total: 2 });
+      return {
+        outputs: [{
+          name: opts.outputName,
+          size: 256,
+          pages: 2,
+          blob: new Blob(["docx"], {
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          }),
+        }],
+        conversion: {
+          nativePages: [1],
+          ocrPages: [2],
+          lowConfidencePages: [],
+          fallbackPages: [],
+          fallbackRegions: [],
+        },
+      };
+    }),
     sourceHasDigitalSignature: vi.fn(() => false),
     sourceHasEncryption: vi.fn(() => false),
     clearCache: vi.fn(),
@@ -398,6 +418,40 @@ describe("WorkspaceApp canonical runtime", () => {
     expect(opts.quality).toBe("balanced");
     expect(opts.outputName).toBe("scan-ocr.pdf");
     expect(await screen.findByText(/OCR selesai/i)).toBeInTheDocument();
+  });
+
+  it("converts PDF to editable DOCX with automatic OCR enabled by default", async () => {
+    window.history.replaceState(null, "", "/#pdf2docx");
+    render(<WorkspaceApp />);
+
+    fireEvent.change(document.querySelector('input[type="file"]'), {
+      target: {
+        files: [new File(["pdf"], "laporan.pdf", { type: "application/pdf" })],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText("laporan.pdf")).toBeInTheDocument());
+    expect(screen.getAllByText(/PDF ke Word/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/DOCX yang dapat diedit/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Otomatis$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/bahasa OCR/i)).toHaveValue("ind+eng");
+    expect(screen.getByText(/^Akurat$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/nama file hasil/i)).toHaveValue("laporan-word");
+
+    const cta = screen
+      .getAllByRole("button", { name: /ubah ke word/i })
+      .find((button) => !button.disabled);
+    fireEvent.click(cta);
+
+    await waitFor(() => expect(PdfProcess.pdfToDocx).toHaveBeenCalled());
+    const [, opts] = PdfProcess.pdfToDocx.mock.calls.at(-1);
+    expect(opts).toMatchObject({
+      ocrMode: "auto",
+      language: "ind+eng",
+      quality: "accurate",
+      outputName: "laporan-word.docx",
+    });
+    expect(await screen.findByText(/1 halaman teks asli.*1 halaman OCR/i)).toBeInTheDocument();
   });
 
   it("selects all and clears selected split pages", async () => {

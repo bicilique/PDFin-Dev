@@ -4,6 +4,7 @@ import { Icons } from "../icons/PdfinIcons.jsx";
 /** Result file card: success icon, mono filename, meta, primary download action. */
 export function DownloadCard({ name, meta, downloadLabel = "Download", onDownload, icon = null }) {
   const [hover, setHover] = React.useState(false);
+  const defaultIcon = /\.docx$/i.test(name || "") ? Icons.fileDocx(20) : Icons.filePdf(20);
   return (
     <div
       style={{
@@ -30,7 +31,7 @@ export function DownloadCard({ name, meta, downloadLabel = "Download", onDownloa
           flex: "none",
         }}
       >
-        {icon || Icons.filePdf(20)}
+        {icon || defaultIcon}
       </span>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
         <span style={{ font: "var(--weight-medium) 13px/1.3 var(--font-mono)", color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>

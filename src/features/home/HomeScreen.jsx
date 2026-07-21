@@ -4,7 +4,7 @@ import { PDFIN_T } from "../workspace/i18n.js";
 
 const toolCategories = [
   { id: "pages", tools: ["merge", "split", "organize", "rotate", "pagenum"] },
-  { id: "conversion", tools: ["compress", "img2pdf", "pdf2img", "md2pdf", "ocr"] },
+  { id: "conversion", tools: ["compress", "img2pdf", "pdf2img", "pdf2docx", "md2pdf", "ocr"] },
   { id: "security", tools: ["protect", "watermark", "metadata", "sign", "flatten", "unlock"] },
 ];
 

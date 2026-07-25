@@ -1,8 +1,23 @@
 import { PdfEngine } from "./pdfEngine.js";
 import { createTesseractOcrEngine } from "./ocrEngine.js";
+import { extractPageImages } from "./pdfPageImages.js";
+import {
+  alignmentOf,
+  buildBlocks,
+  buildLines,
+  contentBox,
+  detectColumns,
+  itemFontSize,
+  lineParts,
+  splitCells,
+} from "./pdfLayout.js";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const DEFAULT_MARGIN_PT = 72;
+const TWIPS_PER_PT = 20;
+const EMU_PER_PT = 12700;
+const PX_PER_PT = 96 / 72;
+const MIN_MARGIN_PT = 14;
+const MAX_MARGIN_PT = 108;
 let docxApi;
 
 async function loadDocx() {
@@ -23,126 +38,316 @@ function usableText(items) {
     .replace(/\s+/g, "").length;
 }
 
+const twips = (pt) => Math.round(pt * TWIPS_PER_PT);
+const emu = (pt) => Math.round(pt * EMU_PER_PT);
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
 function fontFamily(style = {}) {
   const family = String(style.fontFamily || "").toLowerCase();
-  if (family.includes("times")) return "Times New Roman";
+  if (family.includes("times") || family.includes("serif") && !family.includes("sans")) return "Times New Roman";
   if (family.includes("courier") || family.includes("mono")) return "Courier New";
-  if (family.includes("helvetica") || family.includes("arial")) return "Arial";
+  if (family.includes("georgia")) return "Georgia";
+  if (family.includes("calibri")) return "Calibri";
+  if (family.includes("helvetica") || family.includes("arial") || family.includes("sans")) return "Arial";
   return "Arial";
 }
 
-function itemFontSize(item) {
-  const transformSize = Math.hypot(Number(item?.transform?.[0]) || 0, Number(item?.transform?.[1]) || 0);
-  return Math.max(6, Number(item?.height) || transformSize || 11);
+function fontDescriptor(item, styles) {
+  const style = styles?.[item?.fontName] || {};
+  const signature = `${item?.fontName || ""} ${style.fontFamily || ""}`;
+  return {
+    font: fontFamily(style),
+    bold: /bold|black|heavy|semibold|demi/i.test(signature) || Number(style.fontWeight) >= 600,
+    italics: /italic|oblique/i.test(signature) || style.italic === true,
+  };
 }
 
-function groupTextLines(items) {
-  const lines = [];
-  let current = [];
+function runFor(item, styles, text) {
+  const descriptor = fontDescriptor(item, styles);
+  return new docxApi.TextRun({
+    text,
+    font: descriptor.font,
+    size: Math.round(itemFontSize(item) * 2),
+    bold: descriptor.bold,
+    italics: descriptor.italics,
+  });
+}
 
-  for (const item of items) {
-    const text = String(item?.str || "");
-    if (!text) continue;
-    current.push(item);
-    if (item.hasEOL) {
-      lines.push(current);
-      current = [];
+// Rebuild the readable text of a block, reflowing wrapped lines and undoing
+// end-of-line hyphenation the way the source document reads.
+function blockRuns(block, styles) {
+  const parts = [];
+  block.lines.forEach((line, lineIndex) => {
+    const previous = parts.at(-1);
+    if (lineIndex > 0 && previous) {
+      if (/[‐-―-]$/.test(previous.text) && /^[a-zà-ÿ]/.test(line.text)) {
+        previous.text = previous.text.replace(/[‐-―-]$/, "");
+      } else if (!/\s$/.test(previous.text)) {
+        previous.text = `${previous.text} `;
+      }
+    }
+    parts.push(...lineParts(line.items));
+  });
+  const runs = parts
+    .filter((part) => part.text.length)
+    .map((part) => runFor(part.item, styles, part.text));
+  return runs.length ? runs : [new docxApi.TextRun({ text: "" })];
+}
+
+function cellRuns(items, styles) {
+  const runs = lineParts(items)
+    .filter((part) => part.text.length)
+    .map((part) => runFor(part.item, styles, part.text));
+  return runs.length ? runs : [new docxApi.TextRun({ text: "" })];
+}
+
+// Single lines with wide internal gaps (signature blocks, "Nama : X" rows)
+// keep their horizontal positions through real tab stops.
+function tabbedParagraph(block, styles, box, spacing, alignment) {
+  const cells = splitCells(block.lines[0]);
+  const children = [];
+  const tabStops = [];
+  cells.forEach((cell, index) => {
+    if (index > 0) {
+      children.push(new docxApi.TextRun({ children: [new docxApi.Tab()] }));
+      tabStops.push({
+        type: docxApi.TabStopType.LEFT,
+        position: twips(clamp(cell.left - box.left, 0, box.width)),
+      });
+    }
+    children.push(...cellRuns(cell.items, styles));
+  });
+  return new docxApi.Paragraph({
+    alignment,
+    tabStops,
+    spacing,
+    indent: { left: twips(clamp(block.left - box.left, 0, box.width)) },
+    children,
+  });
+}
+
+function blockParagraph(block, styles, box, bodySize, spacingBefore, leading) {
+  const alignmentKey = alignmentOf(block, box);
+  const alignment = {
+    center: docxApi.AlignmentType.CENTER,
+    right: docxApi.AlignmentType.RIGHT,
+    justify: docxApi.AlignmentType.JUSTIFIED,
+    left: docxApi.AlignmentType.LEFT,
+  }[alignmentKey];
+  const blockLeading = block.lines.length > 1
+    ? (block.lines[0].baseline - block.lines.at(-1).baseline) / (block.lines.length - 1)
+    : leading;
+  const spacing = {
+    before: clamp(twips(spacingBefore), 0, twips(48)),
+    after: 0,
+    line: twips(clamp(blockLeading, block.maxFontSize, block.maxFontSize * 2.4)),
+    lineRule: docxApi.LineRuleType.AT_LEAST,
+  };
+
+  if (block.lines.length === 1 && !block.marker && splitCells(block.lines[0]).length > 1) {
+    return tabbedParagraph(block, styles, box, spacing, docxApi.AlignmentType.LEFT);
+  }
+
+  const indentLeft = alignmentKey === "left" || alignmentKey === "justify"
+    ? twips(clamp(block.left - box.left, 0, box.width * 0.8))
+    : 0;
+  const indent = { left: indentLeft };
+  if (block.marker) {
+    const hanging = twips(clamp(block.marker.length * block.fontSize * 0.55, 8, 48));
+    indent.left = indentLeft + hanging;
+    indent.hanging = hanging;
+  }
+
+  const isHeading = block.lines.length === 1
+    && block.maxFontSize >= bodySize * 1.18
+    && block.lines[0].text.trim().length <= 140;
+
+  return new docxApi.Paragraph({
+    alignment,
+    spacing,
+    indent,
+    outlineLevel: isHeading ? (block.maxFontSize >= bodySize * 1.5 ? 0 : 1) : undefined,
+    children: blockRuns(block, styles),
+  });
+}
+
+function blockTable(block, styles, box) {
+  const anchors = block.columns;
+  const widths = anchors.map((anchor, index) => {
+    const next = index + 1 < anchors.length ? anchors[index + 1] : box.right;
+    return twips(Math.max(24, next - anchor));
+  });
+  const noBorder = { style: docxApi.BorderStyle.NONE, size: 0, color: "auto" };
+  const cellBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+  const tableBorders = { ...cellBorders, insideHorizontal: noBorder, insideVertical: noBorder };
+
+  const rows = block.rows.map((row) => {
+    const cells = [];
+    for (let column = 0; column < anchors.length; column++) {
+      const entry = row.cells.find((candidate) => candidate.column === column);
+      cells.push(new docxApi.TableCell({
+        width: { size: widths[column], type: docxApi.WidthType.DXA },
+        borders: cellBorders,
+        margins: { top: 0, bottom: 0, left: 0, right: twips(4) },
+        children: [
+          new docxApi.Paragraph({
+            spacing: { before: 0, after: 0 },
+            children: entry ? cellRuns(entry.cell.items, styles) : [new docxApi.TextRun({ text: "" })],
+          }),
+        ],
+      }));
+    }
+    return new docxApi.TableRow({ children: cells });
+  });
+
+  return new docxApi.Table({
+    width: { size: twips(box.width), type: docxApi.WidthType.DXA },
+    columnWidths: widths,
+    borders: tableBorders,
+    rows,
+  });
+}
+
+function floatingImageParagraph(images) {
+  return new docxApi.Paragraph({
+    spacing: { before: 0, after: 0, line: 1, lineRule: docxApi.LineRuleType.EXACT },
+    children: images.map((image) => new docxApi.ImageRun({
+      data: image.data,
+      type: "png",
+      transformation: {
+        width: Math.max(1, Math.round(image.width * PX_PER_PT)),
+        height: Math.max(1, Math.round(image.height * PX_PER_PT)),
+      },
+      floating: {
+        horizontalPosition: {
+          relative: docxApi.HorizontalPositionRelativeFrom.PAGE,
+          offset: emu(image.left),
+        },
+        verticalPosition: {
+          relative: docxApi.VerticalPositionRelativeFrom.PAGE,
+          offset: emu(image.top),
+        },
+        behindDocument: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        wrap: { type: docxApi.TextWrappingType.NONE },
+      },
+    })),
+  });
+}
+
+function pageProperties(page, box, columns) {
+  const margin = {
+    top: twips(clamp(page.height - box.top, MIN_MARGIN_PT, MAX_MARGIN_PT)),
+    right: twips(clamp(page.width - box.right, MIN_MARGIN_PT, MAX_MARGIN_PT)),
+    bottom: twips(clamp(box.bottom, MIN_MARGIN_PT, MAX_MARGIN_PT)),
+    left: twips(clamp(box.left, MIN_MARGIN_PT, MAX_MARGIN_PT)),
+  };
+  return {
+    page: {
+      size: { width: twips(page.width), height: twips(page.height) },
+      margin,
+    },
+    ...(columns ? {
+      column: { count: columns.count, space: twips(columns.space), equalWidth: true },
+    } : {}),
+  };
+}
+
+function fallbackSection(page) {
+  return {
+    properties: {
+      page: {
+        size: { width: twips(page.width), height: twips(page.height) },
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      },
+    },
+    children: [
+      new docxApi.Paragraph({
+        spacing: { before: 0, after: 0 },
+        children: [
+          new docxApi.ImageRun({
+            data: page.fallbackImage.data,
+            transformation: {
+              width: page.fallbackImage.width,
+              height: page.fallbackImage.height,
+            },
+            type: "png",
+          }),
+        ],
+      }),
+    ],
+  };
+}
+
+function orderedLines(lines, columns) {
+  if (!columns) return lines;
+  return columns.bands.flatMap((band) => band.lines);
+}
+
+function pageSection(page) {
+  if (page.fallbackImage) return fallbackSection(page);
+
+  const lines = buildLines(page.items);
+  const box = contentBox(lines, page.width, page.height);
+  const columns = page.source === "native" ? detectColumns(lines, page.width) : null;
+  const sizes = lines.flatMap((line) => line.items.map(itemFontSize)).sort((a, b) => a - b);
+  const bodySize = sizes[Math.floor(sizes.length / 2)] || 11;
+  const { blocks, leading } = buildBlocks(orderedLines(lines, columns), box, bodySize);
+
+  const children = [];
+  if (page.images?.length) children.push(floatingImageParagraph(page.images));
+
+  let previousBottom = null;
+  for (const block of blocks) {
+    const top = block.type === "table" ? block.top : block.lines[0].baseline;
+    const gap = previousBottom === null ? 0 : previousBottom - top - leading;
+    if (block.type === "table") {
+      children.push(blockTable(block, page.styles, box));
+      children.push(new docxApi.Paragraph({ spacing: { before: 0, after: 0, line: 1, lineRule: docxApi.LineRuleType.EXACT }, children: [] }));
+      previousBottom = block.rows.at(-1).line.baseline;
+    } else {
+      children.push(blockParagraph(block, page.styles, box, bodySize, Math.max(0, gap), leading));
+      previousBottom = block.bottom;
     }
   }
-  if (current.length) lines.push(current);
-  return lines;
+
+  return { properties: pageProperties(page, box, columns), children };
 }
 
-function alignmentForLine(line, pageWidth) {
-  const left = Math.min(...line.map((item) => Number(item.transform?.[4]) || 0));
-  const right = Math.max(...line.map((item) => (Number(item.transform?.[4]) || 0) + (Number(item.width) || 0)));
-  const center = (left + right) / 2;
-  if (Math.abs(center - pageWidth / 2) <= pageWidth * 0.05 && left > pageWidth * 0.12) {
-    return docxApi.AlignmentType.CENTER;
-  }
-  return docxApi.AlignmentType.LEFT;
-}
-
-function lineToParagraph(line, styles, pageWidth, bodySize) {
-  const largestSize = Math.max(...line.map(itemFontSize));
-  const textLength = line.reduce((total, item) => total + String(item.str || "").length, 0);
-  const heading = largestSize >= bodySize * 1.2 && textLength <= 120;
-  return new docxApi.Paragraph({
-    heading: heading ? docxApi.HeadingLevel.HEADING_1 : undefined,
-    alignment: alignmentForLine(line, pageWidth),
-    spacing: {
-      after: Math.round(Math.max(4, largestSize * 0.35) * 20),
-      line: Math.round(largestSize * 1.22 * 20),
-    },
-    children: line.map((item) => {
-      const size = itemFontSize(item);
-      const style = styles[item.fontName] || {};
-      return new docxApi.TextRun({
-        text: String(item.str || ""),
-        font: fontFamily(style),
-        size: Math.round(size * 2),
-        bold: /bold|black|heavy/i.test(`${item.fontName || ""} ${style.fontFamily || ""}`),
-        italics: /italic|oblique/i.test(`${item.fontName || ""} ${style.fontFamily || ""}`),
-      });
-    }),
-  });
-}
-
-function linesFormTable(lines) {
-  if (lines.length < 2) return false;
-  const columns = lines[0].length;
-  if (columns < 2 || lines.some((line) => line.length !== columns)) return false;
-  const anchors = lines[0].map((item) => Number(item.transform?.[4]) || 0);
-  return lines.every((line) => line.every((item, column) => (
-    Math.abs((Number(item.transform?.[4]) || 0) - anchors[column]) <= 4
-  )));
-}
-
-function linesToTable(lines, styles, pageWidth) {
-  return new docxApi.Table({
-    width: { size: 100, type: docxApi.WidthType.PERCENTAGE },
-    rows: lines.map((line, rowIndex) => new docxApi.TableRow({
-      tableHeader: rowIndex === 0,
-      children: line.map((item) => {
-        const style = styles[item.fontName] || {};
-        return new docxApi.TableCell({
-          children: [
-            new docxApi.Paragraph({
-              children: [
-                new docxApi.TextRun({
-                  text: String(item.str || ""),
-                  font: fontFamily(style),
-                  size: Math.round(itemFontSize(item) * 2),
-                  bold: rowIndex === 0 || /bold|black|heavy/i.test(`${item.fontName || ""} ${style.fontFamily || ""}`),
-                }),
-              ],
-            }),
-          ],
-        });
-      }),
-    })),
-    columnWidths: lines[0].map((item, index) => {
-      const nextX = Number(lines[0][index + 1]?.transform?.[4]);
-      const currentX = Number(item.transform?.[4]) || 0;
-      const width = Number.isFinite(nextX) ? nextX - currentX : pageWidth - currentX - DEFAULT_MARGIN_PT;
-      return Math.round(Math.max(36, width) * 20);
-    }),
-  });
-}
-
-async function extractNativePage(record, pageNumber) {
+async function extractNativePage(record, pageNumber, opts) {
   const page = await record.doc.getPage(pageNumber);
   const viewport = page.getViewport({ scale: 1 });
   const content = await page.getTextContent();
   const items = (content.items || []).filter((item) => typeof item?.str === "string" && item.str.length);
+  let images = [];
+  if (opts?.embedImages !== false) {
+    try {
+      images = await extractPageImages(page, viewport.width, viewport.height);
+    } catch {
+      images = [];
+    }
+  }
   return {
     pageNumber,
     width: viewport.width,
     height: viewport.height,
     items,
+    images,
     styles: content.styles || {},
     usableChars: usableText(items),
   };
+}
+
+// Tesseract reports a tight glyph box, not an em box. Estimate the real font
+// size from which zones the word's characters occupy.
+function emFactor(text) {
+  const value = String(text || "");
+  const ascender = /[A-Z0-9bdfhkltß|(){}[\]/\\]/.test(value);
+  const descender = /[gjpqy,;µ]/.test(value);
+  if (ascender && descender) return 1;
+  if (ascender) return 0.74;
+  if (descender) return 0.7;
+  return 0.48;
 }
 
 function ocrWordsToItems(result, page) {
@@ -157,95 +362,49 @@ function ocrWordsToItems(result, page) {
         ? ay - by
         : Number(a.bbox.x0 ?? a.bbox.left ?? 0) - Number(b.bbox.x0 ?? b.bbox.left ?? 0);
     });
+  const scaleX = page.width / imageWidth;
+  const scaleY = page.height / imageHeight;
   const lines = [];
   for (const word of words) {
     const top = Number(word.bbox.y0 ?? word.bbox.top ?? 0);
+    const bottom = Number(word.bbox.y1 ?? ((word.bbox.top || 0) + (word.bbox.height || 0)));
+    const height = Math.max(1, bottom - top);
     const current = lines.at(-1);
-    if (!current || Math.abs(current.top - top) > 10) {
+    if (!current || Math.abs(current.top - top) > height * 0.6) {
       lines.push({ top, words: [word] });
     } else {
       current.words.push(word);
     }
   }
-  return lines.map((line) => {
-    const first = line.words[0].bbox;
-    const last = line.words.at(-1).bbox;
-    const x0 = Number(first.x0 ?? first.left ?? 0);
-    const y0 = Math.min(...line.words.map((word) => Number(word.bbox.y0 ?? word.bbox.top ?? 0)));
-    const x1 = Number(last.x1 ?? ((last.left || 0) + (last.width || 0)));
-    const y1 = Math.max(...line.words.map((word) => Number(word.bbox.y1 ?? ((word.bbox.top || 0) + (word.bbox.height || 0)))));
-    const height = Math.max(8, ((y1 - y0) / imageHeight) * page.height);
-    return {
-      str: line.words.map((word) => String(word.text).trim()).filter(Boolean).join(" "),
-      dir: "ltr",
-      transform: [
+  // Keep OCR words as individual items so gaps, tabs and table columns are
+  // reconstructed from geometry exactly like a digital page.
+  return lines.flatMap((line) => {
+    const ordered = [...line.words].sort((a, b) => (
+      Number(a.bbox.x0 ?? a.bbox.left ?? 0) - Number(b.bbox.x0 ?? b.bbox.left ?? 0)
+    ));
+    const y1 = Math.max(...ordered.map((word) => Number(word.bbox.y1 ?? ((word.bbox.top || 0) + (word.bbox.height || 0)))));
+    const ems = ordered.map((word) => {
+      const top = Number(word.bbox.y0 ?? word.bbox.top ?? 0);
+      const bottom = Number(word.bbox.y1 ?? ((word.bbox.top || 0) + (word.bbox.height || 0)));
+      return ((bottom - top) * scaleY) / emFactor(word.text);
+    }).sort((a, b) => a - b);
+    const height = Math.max(6, ems[Math.floor(ems.length / 2)] || 11);
+    const hasDescender = ordered.some((word) => /[gjpqy,;µ]/.test(String(word.text || "")));
+    const baseline = page.height - y1 * scaleY + (hasDescender ? height * 0.21 : 0);
+    return ordered.map((word, index) => {
+      const x0 = Number(word.bbox.x0 ?? word.bbox.left ?? 0) * scaleX;
+      const x1 = Number(word.bbox.x1 ?? ((word.bbox.left || 0) + (word.bbox.width || 0))) * scaleX;
+      return {
+        str: index === 0 ? String(word.text).trim() : ` ${String(word.text).trim()}`,
+        dir: "ltr",
+        transform: [height, 0, 0, height, x0, baseline],
+        width: Math.max(1, x1 - x0),
         height,
-        0,
-        0,
-        height,
-        (x0 / imageWidth) * page.width,
-        page.height - (y1 / imageHeight) * page.height,
-      ],
-      width: Math.max(1, ((x1 - x0) / imageWidth) * page.width),
-      height,
-      fontName: "ocr",
-      hasEOL: true,
-    };
+        fontName: "ocr",
+        hasEOL: index === ordered.length - 1,
+      };
+    });
   });
-}
-
-function pageSection(page) {
-  if (page.fallbackImage) {
-    return {
-      properties: {
-        page: {
-          size: {
-            width: Math.round(page.width * 20),
-            height: Math.round(page.height * 20),
-          },
-          margin: { top: 0, right: 0, bottom: 0, left: 0 },
-        },
-      },
-      children: [
-        new docxApi.Paragraph({
-          spacing: { before: 0, after: 0 },
-          children: [
-            new docxApi.ImageRun({
-              data: page.fallbackImage.data,
-              transformation: {
-                width: page.fallbackImage.width,
-                height: page.fallbackImage.height,
-              },
-              type: "png",
-            }),
-          ],
-        }),
-      ],
-    };
-  }
-  const lines = groupTextLines(page.items);
-  const sizes = page.items.map(itemFontSize).sort((a, b) => a - b);
-  const bodySize = sizes[Math.floor(sizes.length / 2)] || 11;
-  const children = linesFormTable(lines)
-    ? [linesToTable(lines, page.styles, page.width)]
-    : lines.map((line) => lineToParagraph(line, page.styles, page.width, bodySize));
-  return {
-    properties: {
-      page: {
-        size: {
-          width: Math.round(page.width * 20),
-          height: Math.round(page.height * 20),
-        },
-        margin: {
-          top: DEFAULT_MARGIN_PT * 20,
-          right: DEFAULT_MARGIN_PT * 20,
-          bottom: DEFAULT_MARGIN_PT * 20,
-          left: DEFAULT_MARGIN_PT * 20,
-        },
-      },
-    },
-    children,
-  };
 }
 
 async function canvasToPng(canvas) {
@@ -282,7 +441,7 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
         page: pageNumber,
         total: record.pageCount,
       });
-      const page = await extractNativePage(record, pageNumber);
+      const page = await extractNativePage(record, pageNumber, opts);
       const needsOcr = opts.ocrMode === "all" || (opts.ocrMode !== "off" && page.usableChars < 12);
       if (needsOcr) {
         try {
@@ -341,7 +500,17 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
   }
 
   const { Document, Packer } = await loadDocx();
-  const document = new Document({ sections: pages.map(pageSection) });
+  const document = new Document({
+    sections: pages.map(pageSection),
+    styles: {
+      default: {
+        document: {
+          run: { font: "Arial", size: 22 },
+          paragraph: { spacing: { before: 0, after: 0, line: 240, lineRule: docxApi.LineRuleType.AUTO } },
+        },
+      },
+    },
+  });
   onProgress?.(90, { phase: "pack", total: record.pageCount });
   const packed = await Packer.toBlob(document);
   const blob = new Blob([packed], { type: DOCX_MIME });
@@ -359,6 +528,7 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
       ocrPages: pages.filter((page) => page.source === "ocr").map((page) => page.pageNumber),
       lowConfidencePages: pages.filter((page) => page.source === "ocr" && page.confidence !== null && page.confidence < 62).map((page) => page.pageNumber),
       fallbackPages: pages.filter((page) => page.source === "fallback").map((page) => page.pageNumber),
+      imagePages: pages.filter((page) => page.images?.length).map((page) => page.pageNumber),
       fallbackRegions: [],
     },
   };

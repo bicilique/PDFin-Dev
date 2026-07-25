@@ -1,6 +1,7 @@
 import { PdfEngine } from "./pdfEngine.js";
 import { createTesseractOcrEngine } from "./ocrEngine.js";
 import { extractPageImages } from "./pdfPageImages.js";
+import { renderArtRegions } from "./pdfArtRaster.js";
 import { colorLookup, extractPageGraphics, resolveFontNames } from "./pdfVector.js";
 import { solidPng } from "./solidPng.js";
 import {
@@ -445,6 +446,9 @@ function pageSection(page) {
   const backdrop = [
     ...shapes.map((shape) => ({ ...shape, data: solidPng(shape.color) })),
     ...(page.images || []),
+    // Icons, logos and gradients ride on top of the flat fills, the way the PDF
+    // paints them.
+    ...(page.artImages || []),
   ];
 
   const children = [];
@@ -477,6 +481,16 @@ function pageSection(page) {
   return { properties: pageProperties(page, box, columns), children };
 }
 
+// Both graphics readers walk the same operator list; parsing it once halves the
+// work on graphics-heavy pages.
+async function readOperatorList(page) {
+  try {
+    return await page.getOperatorList();
+  } catch {
+    return null;
+  }
+}
+
 async function extractNativePage(record, pageNumber, opts) {
   const page = await record.doc.getPage(pageNumber);
   const viewport = page.getViewport({ scale: 1 });
@@ -484,19 +498,38 @@ async function extractNativePage(record, pageNumber, opts) {
   const items = (content.items || []).filter((item) => typeof item?.str === "string" && item.str.length);
   const wantsVisuals = opts?.embedImages !== false;
   let images = [];
-  let graphics = { shapes: [], textColors: [] };
+  let artImages = [];
+  let graphics = { shapes: [], textColors: [], artRegions: [] };
   if (wantsVisuals) {
+    const operatorList = await readOperatorList(page);
     try {
-      graphics = await extractPageGraphics(page, viewport.width, viewport.height, opts);
+      graphics = await extractPageGraphics(page, viewport.width, viewport.height, { ...opts, operatorList });
     } catch {
-      graphics = { shapes: [], textColors: [] };
+      graphics = { shapes: [], textColors: [], artRegions: [] };
     }
     try {
-      images = await extractPageImages(page, viewport.width, viewport.height);
+      images = await extractPageImages(page, viewport.width, viewport.height, { operatorList });
     } catch {
       images = [];
     }
+    if (opts?.vectorArt !== false) {
+      try {
+        artImages = await renderArtRegions(page, graphics.artRegions, viewport.width, viewport.height, opts);
+      } catch {
+        artImages = [];
+      }
+    }
   }
+  // Whatever an art crop already contains must not be painted a second time as
+  // a flat rectangle underneath it.
+  const shapes = artImages.length
+    ? graphics.shapes.filter((shape) => !artImages.some((art) => (
+      shape.left >= art.left - 0.5
+      && shape.top >= art.top - 0.5
+      && shape.left + shape.width <= art.left + art.width + 0.5
+      && shape.top + shape.height <= art.top + art.height + 0.5
+    )))
+    : graphics.shapes;
 
   const styles = { ...(content.styles || {}) };
   const psNames = resolveFontNames(page, styles);
@@ -510,7 +543,8 @@ async function extractNativePage(record, pageNumber, opts) {
     height: viewport.height,
     items,
     images,
-    shapes: graphics.shapes,
+    artImages,
+    shapes,
     styles,
     theme: { styles, colorAt: colorLookup(graphics.textColors) },
     usableChars: usableText(items),
@@ -711,6 +745,7 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
       fallbackPages: pages.filter((page) => page.source === "fallback").map((page) => page.pageNumber),
       imagePages: pages.filter((page) => page.images?.length).map((page) => page.pageNumber),
       shapePages: pages.filter((page) => page.shapes?.length).map((page) => page.pageNumber),
+      vectorArtPages: pages.filter((page) => page.artImages?.length).map((page) => page.pageNumber),
       fallbackRegions: [],
     },
   };

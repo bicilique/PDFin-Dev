@@ -16,6 +16,9 @@ import {
 import { PdfEngine } from "./pdfEngine.js";
 import { createTesseractOcrEngine } from "./ocrEngine.js";
 import { convertPdfToDocx } from "./pdfToDocx.js";
+// The annotation, redaction, and text-editing engines are loaded on demand:
+// they are only needed once their tool actually runs, and keeping them out of
+// the workspace's initial module graph keeps the first render light.
 import { encryptPdfWithQpdf } from "./qpdfEncrypt.js";
 import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
 
@@ -678,9 +681,31 @@ import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
     return convertPdfToDocx(files, opts, onProgress);
   }
 
+  async function annotate(files, opts = {}, onProgress) {
+    const { annotatePdfs } = await import("./pdfAnnotate.js");
+    return annotatePdfs(files, opts, onProgress);
+  }
+
+  async function redact(files, opts = {}, onProgress) {
+    const { redactPdfs } = await import("./pdfRedact.js");
+    return redactPdfs(files, opts, onProgress);
+  }
+
+  // The text editor keeps its changes as a flat list; the engine wants them
+  // grouped by file and keyed by page + operator.
+  async function editText(files, opts = {}, onProgress) {
+    const edits = {};
+    for (const change of opts.changes || []) {
+      if (!edits[change.fileId]) edits[change.fileId] = {};
+      edits[change.fileId][`${change.srcIndex}:${change.opIndex}`] = change.text;
+    }
+    const { applyTextEdits } = await import("./pdfTextEdit.js");
+    return applyTextEdits(files, { ...opts, edits }, onProgress);
+  }
+
 export const PdfProcess = {
     clearCache, assemble, split, parseRange, compress, watermark, imagesToPdf,
     pdfToImages, pageNumbers, flatten, metadata, readMetadata, sign, protect,
-    ocr, pdfToDocx, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
+    ocr, pdfToDocx, annotate, redact, editText, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
     sourceHasDigitalSignature, sourceHasEncryption,
   };

@@ -4,8 +4,14 @@ import * as pdfjsLib from "pdfjs-dist";
 // from a pdf.js page together with their position on the page, so exporters
 // can put them back where the PDF had them instead of dropping them.
 
-const MIN_SIDE_PT = 4;
-const MAX_IMAGES_PER_PAGE = 24;
+// Small placed images are exactly the icons and bullets a conversion is judged
+// on, so the floor only excludes hairlines.
+const MIN_SIDE_PT = 1.5;
+const MAX_IMAGES_PER_PAGE = 60;
+// pdf.js ImageKind
+const GRAYSCALE_1BPP = 1;
+const RGB_24BPP = 2;
+const RGBA_32BPP = 3;
 
 function multiply(a, b) {
   return [
@@ -55,10 +61,28 @@ async function toPngBytes(image) {
   } else if (image.data) {
     const source = image.data;
     const target = ctx.createImageData(width, height);
+    // The declared kind beats a byte-count guess: a 1-bit image packs eight
+    // pixels per byte, which the guess would read as a fraction of a channel.
+    const kind = Number(image.kind) || 0;
     const channels = source.length / (width * height);
-    if (channels >= 3.9) {
+    if (kind === GRAYSCALE_1BPP) {
+      const rowBytes = (width + 7) >> 3;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const byte = source[y * rowBytes + (x >> 3)] || 0;
+          const value = byte & (128 >> (x & 7)) ? 255 : 0;
+          const pixel = (y * width + x) * 4;
+          target.data[pixel] = value;
+          target.data[pixel + 1] = value;
+          target.data[pixel + 2] = value;
+          target.data[pixel + 3] = 255;
+        }
+      }
+    } else if (kind === RGBA_32BPP || (!kind && channels >= 3.9)) {
+      // pdf.js has already composited any soft mask here, so the alpha channel
+      // is what keeps a transparent logo from becoming a white block.
       target.data.set(source.subarray(0, target.data.length));
-    } else if (channels >= 2.9) {
+    } else if (kind === RGB_24BPP || (!kind && channels >= 2.9)) {
       for (let pixel = 0; pixel < width * height; pixel++) {
         target.data[pixel * 4] = source[pixel * 3];
         target.data[pixel * 4 + 1] = source[pixel * 3 + 1];
@@ -90,12 +114,12 @@ async function toPngBytes(image) {
  * @returns {Promise<Array<{data: Uint8Array, left: number, top: number, width: number, height: number}>>}
  * Positions are in PDF points with the origin at the top-left of the page.
  */
-export async function extractPageImages(page, pageWidth, pageHeight) {
+export async function extractPageImages(page, pageWidth, pageHeight, options = {}) {
   if (typeof page?.getOperatorList !== "function") return [];
   const OPS = pdfjsLib.OPS || {};
   let operatorList;
   try {
-    operatorList = await page.getOperatorList();
+    operatorList = options.operatorList || await page.getOperatorList();
   } catch {
     return [];
   }

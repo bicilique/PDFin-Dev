@@ -13,6 +13,9 @@ import { TOOL_DEFS } from "./tools/tools-1.jsx";
 import "./tools/tools-2.jsx";
 import "./tools/tools-3.jsx";
 import "./tools/tools-4.jsx";
+import "./tools/tools-5.jsx";
+import "./tools/tools-6.jsx";
+import "./tools/tools-7.jsx";
 import { WORKSPACE_TOOL_IDS } from "./toolCatalog.js";
 import "./workspace-responsive.css";
 

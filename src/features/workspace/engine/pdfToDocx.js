@@ -1,13 +1,18 @@
 import { PdfEngine } from "./pdfEngine.js";
 import { createTesseractOcrEngine } from "./ocrEngine.js";
 import { extractPageImages } from "./pdfPageImages.js";
+import { colorLookup, extractPageGraphics, resolveFontNames } from "./pdfVector.js";
+import { solidPng } from "./solidPng.js";
 import {
   alignmentOf,
   buildBlocks,
   buildLines,
   contentBox,
   detectColumns,
+  itemBaseline,
   itemFontSize,
+  itemLeft,
+  itemRight,
   lineParts,
   splitCells,
 } from "./pdfLayout.js";
@@ -42,8 +47,11 @@ const twips = (pt) => Math.round(pt * TWIPS_PER_PT);
 const emu = (pt) => Math.round(pt * EMU_PER_PT);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-function fontFamily(style = {}) {
-  const family = String(style.fontFamily || "").toLowerCase();
+// The real font name (from the embedded font) beats the generic family that
+// `getTextContent()` reports — headless-Chrome PDFs label every face
+// "sans-serif", which would otherwise flatten bold and italic text.
+function fontFamily(style = {}, psName = "") {
+  const family = `${String(psName)} ${String(style.fontFamily || "")}`.toLowerCase();
   if (family.includes("times") || family.includes("serif") && !family.includes("sans")) return "Times New Roman";
   if (family.includes("courier") || family.includes("mono")) return "Courier New";
   if (family.includes("georgia")) return "Georgia";
@@ -52,30 +60,37 @@ function fontFamily(style = {}) {
   return "Arial";
 }
 
-function fontDescriptor(item, styles) {
-  const style = styles?.[item?.fontName] || {};
-  const signature = `${item?.fontName || ""} ${style.fontFamily || ""}`;
+function fontDescriptor(item, theme) {
+  const style = theme?.styles?.[item?.fontName] || {};
+  const psName = String(style.psName || "");
+  const signature = `${psName} ${item?.fontName || ""} ${style.fontFamily || ""}`;
   return {
-    font: fontFamily(style),
+    font: fontFamily(style, psName),
     bold: /bold|black|heavy|semibold|demi/i.test(signature) || Number(style.fontWeight) >= 600,
     italics: /italic|oblique/i.test(signature) || style.italic === true,
   };
 }
 
-function runFor(item, styles, text) {
-  const descriptor = fontDescriptor(item, styles);
+function runFor(item, theme, text) {
+  const descriptor = fontDescriptor(item, theme);
+  const color = theme?.colorAt?.(itemLeft(item), itemBaseline(item));
+  // A fill that hugs the text (badge, pill, highlighted cell) rides along as run
+  // shading instead of a floating shape, so it can never drift off the words.
+  const shade = theme?.shading?.get(item);
   return new docxApi.TextRun({
     text,
     font: descriptor.font,
     size: Math.round(itemFontSize(item) * 2),
     bold: descriptor.bold,
     italics: descriptor.italics,
+    ...(color && color !== "000000" ? { color } : {}),
+    ...(shade ? { shading: { type: docxApi.ShadingType.CLEAR, color: "auto", fill: shade } } : {}),
   });
 }
 
 // Rebuild the readable text of a block, reflowing wrapped lines and undoing
 // end-of-line hyphenation the way the source document reads.
-function blockRuns(block, styles) {
+function blockRuns(block, theme) {
   const parts = [];
   block.lines.forEach((line, lineIndex) => {
     const previous = parts.at(-1);
@@ -90,20 +105,20 @@ function blockRuns(block, styles) {
   });
   const runs = parts
     .filter((part) => part.text.length)
-    .map((part) => runFor(part.item, styles, part.text));
+    .map((part) => runFor(part.item, theme, part.text));
   return runs.length ? runs : [new docxApi.TextRun({ text: "" })];
 }
 
-function cellRuns(items, styles) {
+function cellRuns(items, theme) {
   const runs = lineParts(items)
     .filter((part) => part.text.length)
-    .map((part) => runFor(part.item, styles, part.text));
+    .map((part) => runFor(part.item, theme, part.text));
   return runs.length ? runs : [new docxApi.TextRun({ text: "" })];
 }
 
 // Single lines with wide internal gaps (signature blocks, "Nama : X" rows)
 // keep their horizontal positions through real tab stops.
-function tabbedParagraph(block, styles, box, spacing, alignment) {
+function tabbedParagraph(block, theme, box, spacing, alignment) {
   const cells = splitCells(block.lines[0]);
   const children = [];
   const tabStops = [];
@@ -115,7 +130,7 @@ function tabbedParagraph(block, styles, box, spacing, alignment) {
         position: twips(clamp(cell.left - box.left, 0, box.width)),
       });
     }
-    children.push(...cellRuns(cell.items, styles));
+    children.push(...cellRuns(cell.items, theme));
   });
   return new docxApi.Paragraph({
     alignment,
@@ -126,7 +141,7 @@ function tabbedParagraph(block, styles, box, spacing, alignment) {
   });
 }
 
-function blockParagraph(block, styles, box, bodySize, spacingBefore, leading) {
+function blockParagraph(block, theme, box, bodySize, spacingBefore, leading) {
   const alignmentKey = alignmentOf(block, box);
   const alignment = {
     center: docxApi.AlignmentType.CENTER,
@@ -138,14 +153,16 @@ function blockParagraph(block, styles, box, bodySize, spacingBefore, leading) {
     ? (block.lines[0].baseline - block.lines.at(-1).baseline) / (block.lines.length - 1)
     : leading;
   const spacing = {
-    before: clamp(twips(spacingBefore), 0, twips(48)),
+    // Keep the real vertical gap: page-anchored graphics sit at their PDF
+    // coordinates, so squeezing the text flow would slide it off its backdrop.
+    before: clamp(twips(spacingBefore), 0, twips(400)),
     after: 0,
     line: twips(clamp(blockLeading, block.maxFontSize, block.maxFontSize * 2.4)),
     lineRule: docxApi.LineRuleType.AT_LEAST,
   };
 
   if (block.lines.length === 1 && !block.marker && splitCells(block.lines[0]).length > 1) {
-    return tabbedParagraph(block, styles, box, spacing, docxApi.AlignmentType.LEFT);
+    return tabbedParagraph(block, theme, box, spacing, docxApi.AlignmentType.LEFT);
   }
 
   const indentLeft = alignmentKey === "left" || alignmentKey === "justify"
@@ -167,11 +184,11 @@ function blockParagraph(block, styles, box, bodySize, spacingBefore, leading) {
     spacing,
     indent,
     outlineLevel: isHeading ? (block.maxFontSize >= bodySize * 1.5 ? 0 : 1) : undefined,
-    children: blockRuns(block, styles),
+    children: blockRuns(block, theme),
   });
 }
 
-function blockTable(block, styles, box) {
+function blockTable(block, theme, box) {
   const anchors = block.columns;
   const widths = anchors.map((anchor, index) => {
     const next = index + 1 < anchors.length ? anchors[index + 1] : box.right;
@@ -181,23 +198,35 @@ function blockTable(block, styles, box) {
   const cellBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
   const tableBorders = { ...cellBorders, insideHorizontal: noBorder, insideVertical: noBorder };
 
-  const rows = block.rows.map((row) => {
+  const rows = block.rows.map((row, index) => {
+    // Rows keep the height the PDF gave them so the flowing text stays on top
+    // of the page-anchored shading instead of drifting up the page. The band
+    // measured is the one *above* the row's baseline, and the cell text is
+    // bottom-aligned inside it, which puts the baseline back where it was.
+    const previous = block.rows[index - 1];
+    const height = previous
+      ? Math.max(row.line.fontSize, previous.line.baseline - row.line.baseline)
+      : row.line.fontSize * 1.3;
     const cells = [];
     for (let column = 0; column < anchors.length; column++) {
       const entry = row.cells.find((candidate) => candidate.column === column);
       cells.push(new docxApi.TableCell({
         width: { size: widths[column], type: docxApi.WidthType.DXA },
         borders: cellBorders,
+        verticalAlign: docxApi.VerticalAlign.BOTTOM,
         margins: { top: 0, bottom: 0, left: 0, right: twips(4) },
         children: [
           new docxApi.Paragraph({
             spacing: { before: 0, after: 0 },
-            children: entry ? cellRuns(entry.cell.items, styles) : [new docxApi.TextRun({ text: "" })],
+            children: entry ? cellRuns(entry.cell.items, theme) : [new docxApi.TextRun({ text: "" })],
           }),
         ],
       }));
     }
-    return new docxApi.TableRow({ children: cells });
+    return new docxApi.TableRow({
+      height: { value: twips(height), rule: docxApi.HeightRule.ATLEAST },
+      children: cells,
+    });
   });
 
   return new docxApi.Table({
@@ -208,17 +237,31 @@ function blockTable(block, styles, box) {
   });
 }
 
+// Every drawing needs its own `wp:docPr` id: docx@9 restarts its generator per
+// drawing, so without this all anchors claim id 1 and Word/LibreOffice keeps
+// only the first one on the page.
+let drawingId = 0;
+
+function drawingProperties() {
+  drawingId += 1;
+  return { name: `drawing-${drawingId}`, id: String(drawingId) };
+}
+
 function floatingImageParagraph(images) {
   return new docxApi.Paragraph({
     spacing: { before: 0, after: 0, line: 1, lineRule: docxApi.LineRuleType.EXACT },
     children: images.map((image) => new docxApi.ImageRun({
       data: image.data,
       type: "png",
+      altText: drawingProperties(),
       transformation: {
         width: Math.max(1, Math.round(image.width * PX_PER_PT)),
         height: Math.max(1, Math.round(image.height * PX_PER_PT)),
       },
       floating: {
+        // Without an explicit z-order docx derives one from the image height,
+        // which would hide every small fill under the page-sized ones.
+        zIndex: drawingId,
         horizontalPosition: {
           relative: docxApi.HorizontalPositionRelativeFrom.PAGE,
           offset: emu(image.left),
@@ -267,6 +310,7 @@ function fallbackSection(page) {
         children: [
           new docxApi.ImageRun({
             data: page.fallbackImage.data,
+            altText: drawingProperties(),
             transformation: {
               width: page.fallbackImage.width,
               height: page.fallbackImage.height,
@@ -277,6 +321,105 @@ function fallbackSection(page) {
       }),
     ],
   };
+}
+
+/**
+ * Recover table column boundaries from the fills the PDF painted: a header
+ * ruling is a row of same-height rectangles sitting side by side. Text tables
+ * with tight columns defeat the gap heuristic, but this ruling is exact.
+ * @returns {(baseline: number) => number[] | null}
+ */
+function gridLookup(page) {
+  const bands = new Map();
+  for (const shape of page.shapes || []) {
+    const key = `${Math.round(shape.top)}:${Math.round(shape.height)}`;
+    const band = bands.get(key) || [];
+    band.push(shape);
+    bands.set(key, band);
+  }
+
+  const grids = [];
+  for (const band of bands.values()) {
+    if (band.length < 3) continue;
+    const ordered = [...band].sort((a, b) => a.left - b.left);
+    const edges = [ordered[0].left];
+    let adjacent = true;
+    for (const shape of ordered) {
+      if (Math.abs(shape.left - edges.at(-1)) > 3) {
+        adjacent = false;
+        break;
+      }
+      edges.push(shape.left + shape.width);
+    }
+    const span = edges.at(-1) - edges[0];
+    if (!adjacent || span < page.width * 0.4) continue;
+    const headerTop = ordered[0].top;
+    const top = page.height - headerTop;
+    // The banded row fills below the header mark where the table ends; without
+    // them the grid would keep slicing the body text that follows.
+    const body = (page.shapes || [])
+      .filter((shape) => (
+        shape.top >= headerTop
+        && Math.abs(shape.left - edges[0]) <= 3
+        && Math.abs(shape.width - span) <= 6
+      ))
+      .sort((a, b) => a.top - b.top);
+    const headerHeight = ordered[0].height;
+    let deepest = headerTop + headerHeight;
+    for (const shape of body) {
+      // Rows must stay contiguous with the header; a band further down the page
+      // belongs to something else and would stretch the grid over body text.
+      if (shape.top - deepest > headerHeight * 2.5) break;
+      deepest = Math.max(deepest, shape.top + shape.height);
+    }
+    // Every painted row of the same table reports the same edges; merge them so
+    // the table is one continuous region instead of a stack of striped gaps.
+    const key = edges.map((edge) => Math.round(edge)).join(",");
+    const merged = grids.find((grid) => grid.key === key);
+    if (merged) {
+      merged.top = Math.max(merged.top, top);
+      merged.bottom = Math.min(merged.bottom, page.height - deepest);
+    } else {
+      grids.push({ key, top, bottom: page.height - deepest, edges });
+    }
+  }
+
+  if (!grids.length) return () => null;
+  return (baseline) => grids.find((grid) => baseline <= grid.top && baseline >= grid.bottom)?.edges || null;
+}
+
+/**
+ * Split the page's vector fills into text highlights and page backdrop.
+ * A fill that closely wraps a run of text (a status pill, a shaded label) is
+ * better expressed as run shading, which stays glued to the words when the
+ * text reflows; everything larger stays a page-anchored drawing.
+ */
+function splitShading(page, lines) {
+  const shading = new Map();
+  const backdrop = [];
+  for (const shape of page.shapes || []) {
+    const bottom = page.height - (shape.top + shape.height);
+    const top = page.height - shape.top;
+    const covered = [];
+    for (const line of lines) {
+      if (line.baseline < bottom - 1 || line.baseline > top + 1) continue;
+      for (const item of line.items) {
+        if (itemLeft(item) >= shape.left - 1 && itemRight(item) <= shape.left + shape.width + 1) {
+          covered.push(item);
+        }
+      }
+    }
+    const maxSize = covered.length ? Math.max(...covered.map(itemFontSize)) : 0;
+    const span = covered.length
+      ? Math.max(...covered.map(itemRight)) - Math.min(...covered.map(itemLeft))
+      : 0;
+    if (covered.length && shape.height <= maxSize * 2.5 && shape.width <= span * 1.8 + maxSize * 2) {
+      for (const item of covered) shading.set(item, shape.color);
+    } else {
+      backdrop.push(shape);
+    }
+  }
+  return { shading, backdrop };
 }
 
 function orderedLines(lines, columns) {
@@ -292,21 +435,41 @@ function pageSection(page) {
   const columns = page.source === "native" ? detectColumns(lines, page.width) : null;
   const sizes = lines.flatMap((line) => line.items.map(itemFontSize)).sort((a, b) => a - b);
   const bodySize = sizes[Math.floor(sizes.length / 2)] || 11;
-  const { blocks, leading } = buildBlocks(orderedLines(lines, columns), box, bodySize);
+  const { blocks, leading } = buildBlocks(orderedLines(lines, columns), box, bodySize, gridLookup(page));
+
+  const { shading, backdrop: shapes } = splitShading(page, lines);
+  const theme = { ...page.theme, shading };
+
+  // Vector fills first, then raster art: later drawings sit on top, and both
+  // stay behind the text the way the PDF paints them.
+  const backdrop = [
+    ...shapes.map((shape) => ({ ...shape, data: solidPng(shape.color) })),
+    ...(page.images || []),
+  ];
 
   const children = [];
-  if (page.images?.length) children.push(floatingImageParagraph(page.images));
+  if (backdrop.length) children.push(floatingImageParagraph(backdrop));
 
   let previousBottom = null;
   for (const block of blocks) {
     const top = block.type === "table" ? block.top : block.lines[0].baseline;
     const gap = previousBottom === null ? 0 : previousBottom - top - leading;
     if (block.type === "table") {
-      children.push(blockTable(block, page.styles, box));
+      // A table cannot carry "space before", so the gap the PDF left above it
+      // becomes a spacer paragraph. The first row already contributes a band of
+      // its own above the first baseline, so that band comes out of the spacer.
+      const spacer = gap - block.rows[0].line.fontSize * 1.3;
+      if (spacer > 1) {
+        children.push(new docxApi.Paragraph({
+          spacing: { before: 0, after: 0, line: twips(spacer), lineRule: docxApi.LineRuleType.EXACT },
+          children: [],
+        }));
+      }
+      children.push(blockTable(block, theme, box));
       children.push(new docxApi.Paragraph({ spacing: { before: 0, after: 0, line: 1, lineRule: docxApi.LineRuleType.EXACT }, children: [] }));
       previousBottom = block.rows.at(-1).line.baseline;
     } else {
-      children.push(blockParagraph(block, page.styles, box, bodySize, Math.max(0, gap), leading));
+      children.push(blockParagraph(block, theme, box, bodySize, Math.max(0, gap), leading));
       previousBottom = block.bottom;
     }
   }
@@ -319,21 +482,37 @@ async function extractNativePage(record, pageNumber, opts) {
   const viewport = page.getViewport({ scale: 1 });
   const content = await page.getTextContent();
   const items = (content.items || []).filter((item) => typeof item?.str === "string" && item.str.length);
+  const wantsVisuals = opts?.embedImages !== false;
   let images = [];
-  if (opts?.embedImages !== false) {
+  let graphics = { shapes: [], textColors: [] };
+  if (wantsVisuals) {
+    try {
+      graphics = await extractPageGraphics(page, viewport.width, viewport.height, opts);
+    } catch {
+      graphics = { shapes: [], textColors: [] };
+    }
     try {
       images = await extractPageImages(page, viewport.width, viewport.height);
     } catch {
       images = [];
     }
   }
+
+  const styles = { ...(content.styles || {}) };
+  const psNames = resolveFontNames(page, styles);
+  for (const [key, psName] of Object.entries(psNames)) {
+    styles[key] = { ...styles[key], psName };
+  }
+
   return {
     pageNumber,
     width: viewport.width,
     height: viewport.height,
     items,
     images,
-    styles: content.styles || {},
+    shapes: graphics.shapes,
+    styles,
+    theme: { styles, colorAt: colorLookup(graphics.textColors) },
     usableChars: usableText(items),
   };
 }
@@ -430,6 +609,7 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
   if (isEncrypted(record.bytes)) throw new Error("PDF_ALREADY_ENCRYPTED");
   if (opts.signal?.aborted) throw new Error("DOCX_CANCELLED");
 
+  drawingId = 0;
   const pages = [];
   let ocrEngine = opts.ocrEngine || null;
   let ownsOcrEngine = false;
@@ -471,6 +651,7 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
           if (opts.signal?.aborted) throw new Error("DOCX_CANCELLED");
           page.items = ocrWordsToItems(result, page);
           page.styles = { ocr: { fontFamily: "Arial" } };
+          page.theme = { styles: page.styles, colorAt: null };
           page.source = "ocr";
           page.usableChars = usableText(page.items);
           const confidences = (result?.words || [])
@@ -529,6 +710,7 @@ export async function convertPdfToDocx(files, opts = {}, onProgress) {
       lowConfidencePages: pages.filter((page) => page.source === "ocr" && page.confidence !== null && page.confidence < 62).map((page) => page.pageNumber),
       fallbackPages: pages.filter((page) => page.source === "fallback").map((page) => page.pageNumber),
       imagePages: pages.filter((page) => page.images?.length).map((page) => page.pageNumber),
+      shapePages: pages.filter((page) => page.shapes?.length).map((page) => page.pageNumber),
       fallbackRegions: [],
     },
   };

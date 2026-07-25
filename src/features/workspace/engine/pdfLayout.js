@@ -245,11 +245,45 @@ function nearestColumn(columns, value, tolerance) {
 }
 
 /**
+ * Split a line along a known column grid (the x positions of a table's painted
+ * header cells). Text tables whose columns sit close together defeat the
+ * gap heuristic, but the ruling the PDF drew tells us exactly where they are.
+ */
+export function gridCells(line, grid) {
+  if (!grid || grid.length < 2) return null;
+  if (line.left < grid[0] - Math.max(3, line.fontSize) || line.right > grid.at(-1)) return null;
+  const buckets = grid.slice(0, -1).map(() => []);
+  for (const item of line.items) {
+    const center = itemLeft(item) + Math.min(2, (Number(item?.width) || 0) / 2);
+    let column = -1;
+    for (let index = 0; index < buckets.length; index++) {
+      if (center >= grid[index] - 1 && center < grid[index + 1]) {
+        column = index;
+        break;
+      }
+    }
+    if (column === -1) return null;
+    buckets[column].push(item);
+  }
+  const cells = [];
+  for (let column = 0; column < buckets.length; column++) {
+    const items = buckets[column];
+    if (!items.length) continue;
+    const left = Math.min(...items.map(itemLeft));
+    const right = Math.max(...items.map(itemRight));
+    const text = joinLineText(items);
+    if (!text.trim().length) continue;
+    cells.push({ items, left, right, text });
+  }
+  return cells.length >= 2 ? cells : null;
+}
+
+/**
  * Detect a run of consecutive lines whose cell start positions align into
  * stable columns. Far more tolerant than exact-item-count matching: rows may
  * have missing cells as long as the ones present sit on shared anchors.
  */
-function detectTableAt(lines, start, bodySize) {
+function detectTableAt(lines, start, bodySize, gridAt) {
   const tolerance = Math.max(6, bodySize * 0.7);
   const candidates = [];
   let previousBaseline = null;
@@ -257,7 +291,14 @@ function detectTableAt(lines, start, bodySize) {
   for (let index = start; index < lines.length; index++) {
     const line = lines[index];
     if (previousBaseline !== null && previousBaseline - line.baseline > Math.max(line.fontSize, bodySize) * 2.6) break;
-    const cells = splitCells(line);
+    // The grid is re-read per line: outside the painted table area there is none.
+    // A later line that shows no gaps at all is prose, not a row, and ends the
+    // table — but the header line may open one, since header labels often sit
+    // too close together for the gap test to see them as separate cells.
+    // The grid is re-read per line: it only exists inside the area the PDF
+    // actually painted as a table, so the prose below one falls back to the gap
+    // heuristic — which ends the table.
+    const cells = gridCells(line, gridAt?.(line.baseline)) || splitCells(line);
     if (cells.length < 2) break;
     candidates.push({ line, cells });
     previousBaseline = line.baseline;
@@ -297,7 +338,7 @@ function detectTableAt(lines, start, bodySize) {
  * Turn lines into layout blocks: tables, list items and paragraphs (with
  * wrapped lines merged back into a single flowing paragraph).
  */
-export function buildBlocks(lines, box, bodySize) {
+export function buildBlocks(lines, box, bodySize, gridAt) {
   const blocks = [];
   const leadings = [];
   for (let index = 1; index < lines.length; index++) {
@@ -308,7 +349,7 @@ export function buildBlocks(lines, box, bodySize) {
 
   let index = 0;
   while (index < lines.length) {
-    const table = detectTableAt(lines, index, bodySize);
+    const table = detectTableAt(lines, index, bodySize, gridAt);
     if (table) {
       blocks.push({
         type: "table",

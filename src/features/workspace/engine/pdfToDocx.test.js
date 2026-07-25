@@ -1,7 +1,10 @@
 import JSZip from "jszip";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as pdfjsLib from "pdfjs-dist";
 import { PdfEngine } from "./pdfEngine.js";
 import { PdfProcess } from "./pdfProcess.js";
+
+const OPS = pdfjsLib.OPS;
 
 function addPdfRecord({ name = "surat.pdf", pages, bytes = new Uint8Array([37, 80, 68, 70]) }) {
   const id = 9001;
@@ -35,6 +38,18 @@ function digitalPage(items, { width = 595, height = 842 } = {}) {
 async function readDocumentXml(blob) {
   const zip = await JSZip.loadAsync(await blob.arrayBuffer());
   return zip.file("word/document.xml").async("string");
+}
+
+// Text is emitted as one run per source item, so assertions read the joined
+// run text rather than a single XML node.
+function runText(xml) {
+  return [...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)]
+    .map((match) => match[1])
+    .join("");
+}
+
+async function readDocumentText(blob) {
+  return runText(await readDocumentXml(blob));
 }
 
 afterEach(() => {
@@ -92,6 +107,94 @@ describe("PdfProcess.pdfToDocx", () => {
     expect(xml).toContain("Dokumen ini diproses secara lokal.");
   });
 
+  it("carries text colour, bold faces and vector fills into the DOCX", async () => {
+    const page = digitalPage([
+      {
+        str: "Ringkasan Hasil",
+        dir: "ltr",
+        transform: [14, 0, 0, 14, 72, 700],
+        width: 120,
+        height: 14,
+        fontName: "body",
+        hasEOL: true,
+      },
+    ]);
+    // A card fill behind the heading, drawn with the same colour the heading
+    // text uses, exactly as a print-to-PDF generator emits it.
+    page.getOperatorList = vi.fn(async () => ({
+      fnArray: [OPS.setFillRGBColor, OPS.constructPath, OPS.fill, OPS.beginText, OPS.setFillRGBColor, OPS.setTextMatrix, OPS.showText, OPS.endText],
+      argsArray: [
+        [242, 244, 247],
+        [[OPS.rectangle], [60, 680, 300, 60], []],
+        null,
+        null,
+        [47, 49, 64],
+        [1, 0, 0, 1, 72, 700],
+        [[]],
+        null,
+      ],
+    }));
+    page.commonObjs = {
+      has: (key) => key === "body",
+      get: () => ({ name: "AAAAAA+Inter-Regular_Bold" }),
+    };
+    const file = addPdfRecord({ pages: [page] });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "off" });
+    const xml = await readDocumentXml(result.outputs[0].blob);
+
+    expect(result.conversion.shapePages).toEqual([1]);
+    expect(xml).toContain('<w:color w:val="2F3140"/>');
+    expect(xml).toContain("<w:b/>");
+    expect(xml).toContain("<w:drawing>");
+    expect(xml).toContain('<w:rFonts w:ascii="Arial"');
+  });
+
+  it("splits gap-free table rows along the column grid the PDF painted", async () => {
+    // Chrome print-to-PDF emits each row as one text chunk with the spacing
+    // baked in, so only the painted header cells reveal the column edges.
+    const cell = (text, x, width, y) => ({
+      str: text,
+      dir: "ltr",
+      transform: [9, 0, 0, 9, x, y],
+      width,
+      height: 9,
+      fontName: "body",
+      hasEOL: false,
+    });
+    // Each chunk runs right up to the next one, so no gap betrays the columns.
+    const row = (a, b, c, y) => [cell(a, 40, 136, y), cell(b, 178, 126, y), cell(c, 306, 126, y)];
+    const page = digitalPage([
+      ...row("Metrik", "Run 1", "Run 2", 800),
+      ...row("Cold start", "485", "474", 780),
+      ...row("Warm start", "203", "209", 760),
+    ]);
+    const headerCell = (left, width) => [
+      [OPS.setFillRGBColor, [47, 49, 64]],
+      [OPS.constructPath, [[OPS.rectangle], [left, 806, width, 20], []]],
+      [OPS.fill, null],
+    ];
+    const rowBand = (bottom) => [
+      [OPS.setFillRGBColor, [242, 244, 247]],
+      [OPS.constructPath, [[OPS.rectangle], [36, bottom, 400, 20], []]],
+      [OPS.fill, null],
+    ];
+    const operators = [...headerCell(36, 140), ...headerCell(176, 130), ...headerCell(306, 130), ...rowBand(786), ...rowBand(766)];
+    page.getOperatorList = vi.fn(async () => ({
+      fnArray: operators.map((entry) => entry[0]),
+      argsArray: operators.map((entry) => entry[1]),
+    }));
+    const file = addPdfRecord({ pages: [page] });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "off" });
+    const xml = await readDocumentXml(result.outputs[0].blob);
+    const texts = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((match) => match[1].trim());
+
+    expect(xml).toContain("<w:tbl>");
+    // Each column lands in its own cell instead of one merged run per row.
+    expect(texts).toEqual(expect.arrayContaining(["Metrik", "Run 1", "Run 2", "Cold start", "485", "474"]));
+  });
+
   it("detects a scanned page and converts OCR words into editable text", async () => {
     const file = addPdfRecord({
       pages: [digitalPage([])],
@@ -119,7 +222,7 @@ describe("PdfProcess.pdfToDocx", () => {
     expect(result.conversion.ocrPages).toEqual([1]);
     expect(ocrEngine.recognizePage).toHaveBeenCalledOnce();
     expect(ocrEngine.terminate).toHaveBeenCalledOnce();
-    expect(await readDocumentXml(result.outputs[0].blob)).toContain("Hasil pindai akurat");
+    expect(await readDocumentText(result.outputs[0].blob)).toContain("Hasil pindai akurat");
   });
 
   it("keeps a scanned page visible as an image when OCR is disabled", async () => {
@@ -166,6 +269,95 @@ describe("PdfProcess.pdfToDocx", () => {
     expect(xml).toContain("<w:tbl>");
     expect(xml).toContain("Ayu");
     expect(xml).toContain("Manajer");
+  });
+
+  it("restores word spacing that the PDF encoded as positioning", async () => {
+    const word = (str, x, width) => ({
+      str,
+      transform: [11, 0, 0, 11, x, 700],
+      width,
+      height: 11,
+      fontName: "body",
+      hasEOL: false,
+    });
+    const file = addPdfRecord({
+      pages: [digitalPage([
+        word("Surat", 72, 28),
+        word("ini", 103, 12),
+        word("sah", 118, 18),
+      ])],
+    });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "auto" });
+
+    expect(await readDocumentText(result.outputs[0].blob)).toContain("Surat ini sah");
+  });
+
+  it("merges wrapped lines back into one paragraph and undoes hyphenation", async () => {
+    const line = (str, y, width) => ({
+      str,
+      transform: [11, 0, 0, 11, 72, y],
+      width,
+      height: 11,
+      fontName: "body",
+      hasEOL: true,
+    });
+    const file = addPdfRecord({
+      pages: [digitalPage([
+        line("Dokumen ini dibuat untuk keperluan admi-", 700, 451),
+        line("nistrasi kantor wilayah.", 686, 140),
+      ])],
+    });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "auto" });
+    const xml = await readDocumentXml(result.outputs[0].blob);
+
+    expect(runText(xml)).toContain("keperluan administrasi kantor wilayah.");
+    expect((xml.match(/<w:p>/g) || []).length).toBe(1);
+  });
+
+  it("keeps a centered heading centered and a right-aligned line right", async () => {
+    const file = addPdfRecord({
+      pages: [digitalPage([
+        { str: "BERITA ACARA", transform: [18, 0, 0, 18, 212, 780], width: 171, height: 18, fontName: "body", hasEOL: true },
+        { str: "Jakarta, 1 Mei 2026", transform: [11, 0, 0, 11, 380, 740], width: 143, height: 11, fontName: "body", hasEOL: true },
+        { str: "Isi dokumen berada pada margin kiri halaman ini.", transform: [11, 0, 0, 11, 72, 700], width: 451, height: 11, fontName: "body", hasEOL: true },
+      ])],
+    });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "auto" });
+    const xml = await readDocumentXml(result.outputs[0].blob);
+
+    expect(xml).toContain('<w:jc w:val="center"/>');
+    expect(xml).toContain('<w:jc w:val="right"/>');
+  });
+
+  it("preserves aligned label columns with tab stops instead of collapsing them", async () => {
+    const file = addPdfRecord({
+      pages: [digitalPage([
+        { str: "Nama", transform: [11, 0, 0, 11, 72, 700], width: 30, height: 11, fontName: "body", hasEOL: false },
+        { str: ": Ayu Lestari", transform: [11, 0, 0, 11, 200, 700], width: 70, height: 11, fontName: "body", hasEOL: true },
+      ])],
+    });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "auto" });
+    const xml = await readDocumentXml(result.outputs[0].blob);
+
+    expect(xml).toContain("<w:tabs>");
+    expect(xml).toContain("<w:tab/>");
+  });
+
+  it("derives page margins from the real content box", async () => {
+    const file = addPdfRecord({
+      pages: [digitalPage([
+        { str: "Konten rapat", transform: [11, 0, 0, 11, 40, 800], width: 80, height: 11, fontName: "body", hasEOL: true },
+      ])],
+    });
+
+    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "auto" });
+    const margins = /<w:pgMar[^>]*w:left="(\d+)"/.exec(await readDocumentXml(result.outputs[0].blob));
+
+    expect(Number(margins[1])).toBe(800);
   });
 
   it("stops after the active OCR page when conversion is cancelled", async () => {

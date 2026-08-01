@@ -5,7 +5,6 @@ export const WORKSPACE_TOOL_IDS = [
   "split",
   "organize",
   "edit",
-  "textedit",
   "redact",
   "rotate",
   "compress",

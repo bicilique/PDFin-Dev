@@ -15,7 +15,7 @@ import "./tools/tools-3.jsx";
 import "./tools/tools-4.jsx";
 import "./tools/tools-5.jsx";
 import "./tools/tools-6.jsx";
-import "./tools/tools-7.jsx";
+// tools-7 is the text-run editing layer of the Edit PDF tool; tools-5 imports it.
 import { WORKSPACE_TOOL_IDS } from "./toolCatalog.js";
 import "./workspace-responsive.css";
 

@@ -15,6 +15,7 @@ import { PdfEngine } from "./pdfEngine.js";
 import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
 import { tokenizeContentStream, serializeContentStream, formatOperand } from "./contentStream.js";
 import { buildFontDecoder, createStandardFontWidthProvider, describeFont, readSimpleEncoding, winAnsiMaps } from "./pdfFontWidths.js";
+import { cssFontStack, fontDisplayName } from "./fontCatalog.js";
 import { parseToUnicodeCMap, encodeWithCMap } from "./pdfCMap.js";
 import { sanitizeWinAnsiText } from "./pdfAnnotate.js";
 import { resolveTextFont } from "./unicodeFont.js";
@@ -63,10 +64,14 @@ const FALLBACK_FONTS = {
   "mono:bi": StandardFonts.CourierBoldOblique,
 };
 
+function familyOf(description = {}) {
+  if (description.family === "mono" || description.family === "serif" || description.family === "sans") return description.family;
+  return description.fixedPitch ? "mono" : description.serif ? "serif" : "sans";
+}
+
 function fallbackFontFor(description) {
-  const family = description.fixedPitch ? "mono" : description.serif ? "serif" : "sans";
   const style = `${description.bold ? "b" : ""}${description.italic ? "i" : ""}`;
-  return FALLBACK_FONTS[`${family}:${style}`] || StandardFonts.Helvetica;
+  return FALLBACK_FONTS[`${familyOf(description)}:${style}`] || StandardFonts.Helvetica;
 }
 
 function decodeStreamBytes(stream) {
@@ -119,7 +124,20 @@ function cmykToRgb(c, m, y, k) {
   return rgb((1 - Math.min(1, c + k)), (1 - Math.min(1, m + k)), (1 - Math.min(1, y + k)));
 }
 
-// Font-level data shared by every run that uses it.
+// Font-level data shared by every run that uses it. Parsing a ToUnicode CMap is
+// the expensive part of reading a page, and the same font resource is reused by
+// every page of a document, so contexts are cached per font object.
+const fontContextCache = new WeakMap();
+
+function fontContextFor(fontDict, standardFontWidth) {
+  if (!(fontDict instanceof PDFDict)) return buildFontContext(fontDict, standardFontWidth);
+  const cached = fontContextCache.get(fontDict);
+  if (cached) return cached;
+  const context = buildFontContext(fontDict, standardFontWidth);
+  fontContextCache.set(fontDict, context);
+  return context;
+}
+
 function buildFontContext(fontDict, standardFontWidth) {
   const decoder = buildFontDecoder(fontDict, standardFontWidth);
   const description = describeFont(fontDict);
@@ -154,7 +172,7 @@ class TextRunWalker {
     if (this.fontCache.has(fontName)) return this.fontCache.get(fontName);
     const fonts = resourceDict(this.resources, "Font");
     const fontDict = fonts ? fonts.lookup(PDFName.of(fontName)) : null;
-    const context = buildFontContext(fontDict, this.standardFontWidth);
+    const context = fontContextFor(fontDict, this.standardFontWidth);
     this.fontCache.set(fontName, context);
     return context;
   }
@@ -419,6 +437,52 @@ function toVisibleRect(box, page) {
   };
 }
 
+function cssColor(fill) {
+  const channel = (value) => Math.max(0, Math.min(255, Math.round((value ?? 0) * 255)));
+  if (!fill || typeof fill.red !== "number") return "#111111";
+  return `rgb(${channel(fill.red)}, ${channel(fill.green)}, ${channel(fill.blue)})`;
+}
+
+// What the overlay needs to draw an edit the way the page already looks.
+function describeRunStyle(description = {}) {
+  return {
+    bold: !!description.bold,
+    italic: !!description.italic,
+    family: familyOf(description),
+    weight: description.weight || (description.bold ? 700 : 400),
+    // A CSS stack for the recognised typeface (Calibri, Georgia, Roboto, ...),
+    // falling back to the generic family when the font is not one we know.
+    css: cssFontStack(description),
+    name: fontDisplayName(description),
+    known: !!description.matched,
+    symbolic: !!description.symbolic,
+  };
+}
+
+// Reading a second page of the same file should not re-parse the whole
+// document, so the read-only document used for extraction is kept per file.
+// Editing always loads its own copy, so nothing here is ever mutated.
+const readerCache = new Map();
+
+function readerFor(fileId, record) {
+  const cached = readerCache.get(fileId);
+  if (cached && cached.bytes === record.bytes) return cached.reader;
+  const reader = (async () => {
+    const doc = await PDFDocument.load(record.bytes, { ignoreEncryption: true });
+    return { doc, pages: doc.getPages(), standardFontWidth: createStandardFontWidthProvider(doc) };
+  })().catch((error) => {
+    readerCache.delete(fileId);
+    throw error;
+  });
+  readerCache.set(fileId, { bytes: record.bytes, reader });
+  return reader;
+}
+
+/** Drops the cached read-only documents, e.g. when the workspace file changes. */
+export function clearTextRunReaders() {
+  readerCache.clear();
+}
+
 /**
  * Lists the editable text runs of one page.
  * Returns `[{ id, opIndex, srcIndex, text, rect, fontSize, editable, reason }]`
@@ -427,11 +491,9 @@ function toVisibleRect(box, page) {
 export async function extractPageTextRuns(fileId, srcIndex) {
   const record = PdfEngine.files.get(fileId);
   if (!record) return [];
-  const doc = await PDFDocument.load(record.bytes, { ignoreEncryption: true });
-  const pages = doc.getPages();
+  const { doc, pages, standardFontWidth } = await readerFor(fileId, record);
   const page = pages[Math.min(Math.max(0, srcIndex | 0), pages.length - 1)];
   if (!page) return [];
-  const standardFontWidth = createStandardFontWidthProvider(doc);
   const { runs } = collectPageRuns(doc, page, standardFontWidth);
   return runs
     .filter((run) => run.text.trim() || run.reason)
@@ -443,16 +505,15 @@ export async function extractPageTextRuns(fileId, srcIndex) {
       text: run.text,
       rect: toVisibleRect(run.box, page),
       fontSize: Math.round(run.drawSize * 10) / 10,
+      // The colour the page draws this text in, so an edit typed over it looks
+      // like the rest of the line instead of like an annotation.
+      color: cssColor(run.fill),
       editable: run.editable,
       unreadable: !!run.unreadable,
       reason: run.reason,
       // Enough of the original font's character for the overlay to preview an
-      // edit in a similar style.
-      style: {
-        bold: !!run.context?.description?.bold,
-        italic: !!run.context?.description?.italic,
-        family: run.context?.description?.fixedPitch ? "mono" : run.context?.description?.serif ? "serif" : "sans",
-      },
+      // edit in a similar style, and for the inspector to name the typeface.
+      style: describeRunStyle(run.context?.description),
     }));
 }
 
@@ -573,7 +634,7 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
           doc,
           rawText,
           {
-            family: description.fixedPitch ? "mono" : description.serif ? "serif" : "sans",
+            family: familyOf(description),
             bold: !!description.bold,
             italic: !!description.italic,
           },
@@ -609,7 +670,9 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
       : `${fallbackBase}-teks-diedit.pdf`;
     const saved = await doc.save();
     const blob = new Blob([saved], { type: "application/pdf" });
-    outputs.push({ name: dedupe(name), blob, size: blob.size, pages: pages.length });
+    // `fileId` lets a caller feed this output straight into another pass (the
+    // editor applies text changes and annotation objects in one run).
+    outputs.push({ name: dedupe(name), blob, size: blob.size, pages: pages.length, fileId: file.id, bytes: saved });
   }
 
   if (onProgress) onProgress(100);

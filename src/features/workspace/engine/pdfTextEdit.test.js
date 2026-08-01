@@ -119,6 +119,17 @@ describe("extractPageTextRuns", () => {
     expect(runs[0].rect.x).toBeCloseTo(0.1, 1);
   });
 
+  it("names the typeface and colour a run is drawn with", async () => {
+    seedFile("t-1", "surat.pdf", await makePdf());
+    const [run] = await extractPageTextRuns("t-1", 0);
+    expect(run.style.name).toBe("Helvetica");
+    expect(run.style.known).toBe(true);
+    expect(run.style.family).toBe("sans");
+    expect(run.style.weight).toBe(400);
+    expect(run.style.css).toMatch(/Helvetica/);
+    expect(run.color).toBe("rgb(26, 51, 77)");
+  });
+
   it("reports rotated-page runs in visible coordinates", async () => {
     seedFile("t-1", "scan.pdf", await makePdf({ rotation: 90 }));
     const runs = await extractPageTextRuns("t-1", 0);

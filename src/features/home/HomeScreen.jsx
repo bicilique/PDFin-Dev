@@ -3,7 +3,7 @@ import { getPrivacyHref, getSelfHostedHref, getToolHref, PROTOTYPE_TOOL_IDS, WOR
 import { PDFIN_T } from "../workspace/i18n.js";
 
 const toolCategories = [
-  { id: "pages", tools: ["merge", "split", "organize", "edit", "textedit", "rotate", "pagenum"] },
+  { id: "pages", tools: ["merge", "split", "organize", "edit", "rotate", "pagenum"] },
   { id: "conversion", tools: ["compress", "img2pdf", "pdf2img", "pdf2docx", "md2pdf", "ocr"] },
   { id: "security", tools: ["protect", "redact", "watermark", "metadata", "sign", "flatten", "unlock"] },
 ];

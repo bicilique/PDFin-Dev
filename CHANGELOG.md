@@ -4,6 +4,41 @@ All notable changes to PDFin will be documented in this file.
 
 The format is based on Keep a Changelog, with release entries grouped by date.
 
+## 2026-08-01 - One PDF Editor
+
+### Changed
+
+- Merged `textedit` (Edit Teks PDF) into `edit` (Edit PDF). The workspace, home screen, and quick switcher now show a single editing tool instead of two that were easy to confuse.
+- The Edit PDF tool opens in "Edit teks asli" mode, with the annotation tools (new text, image, highlight, box, ellipse, line, freehand) alongside it in the same tool picker. Both layers stay visible in the preview whichever mode is active, so the preview always matches the file you download.
+- One processing run now applies both kinds of change: text edits are written into the page's content stream first, then the annotation objects are drawn on top (`PdfProcess.editDocument`).
+- `/textedit/` keeps working and resolves to the Edit PDF tool; its SEO page was folded into `/edit/`.
+
+### Added
+
+- Type directly on the page: clicking existing PDF text turns it into a text field positioned over the words themselves, in the run's own font, size, and colour. Enter moves to the next text run, Shift+Tab/Tab step between runs, and Escape finishes. The inspector field mirrors the same value.
+- New text boxes open straight into typing (click or drag, then type); double-clicking an existing text object re-opens it for typing, and a box left empty is discarded.
+- Added a popular-font catalog (`engine/fontCatalog.js`) covering ~90 families used by office and web documents — Arial, Calibri, Segoe UI, Tahoma, Verdana, Times New Roman, Georgia, Garamond, Cambria, Roboto, Open Sans, Lato, Montserrat, Consolas, Courier New, and more — with weight, italic, and width parsing (`Calibri-Light`, `SegoeUI-Semibold`, `TimesNewRomanPS-BoldItalicMT`, `ArialNarrow-Bold`) and a CSS stack per family.
+- `describeFont` now combines the catalog reading with the font descriptor's own flags and `/FontWeight`, so the inspector can name the typeface ("Helvetica · 9pt") and the substitute font picked for a redraw is a closer match.
+
+### Performance
+
+- Text runs are parsed only for pages near the viewport, and only for pages with edits when another tool is active.
+- The read-only document used for extraction is now parsed once per file instead of once per page, and font contexts (including ToUnicode CMap parsing) are cached per font object across pages.
+- The editor's preview key no longer serializes the whole option object on every keystroke.
+
+### Verified
+
+- `npm run lint` passed with existing warnings and no errors.
+- `npm run typecheck` passed.
+- `npx vitest run` passed with 24 test files and 233 tests (1 skipped), including new suites for the font catalog and the combined edit pass.
+- `npm run build` passed and prerendered `/edit/`.
+- Manual Playwright verification of the built app: typing over existing text on the page, Enter stepping to the next run, creating and typing into a new text box by click and by drag, applying both change kinds in one run, and the mobile settings sheet.
+
+### Bundle Impact
+
+- Release main JS bundle: `1,422.80 kB`, gzip `476.47 kB` (previous build `1,420.07 kB`, gzip `475.33 kB`).
+- The font catalog ships in the lazily loaded `pdfFontWidths` chunk: `24.26 kB`, gzip `7.32 kB` (previously `9.98 kB`, gzip `3.57 kB`); it is fetched only when a page's text is parsed for editing.
+
 ## 2026-07-18 - Markdown to PDF Tool
 
 ### Added

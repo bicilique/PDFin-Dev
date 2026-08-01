@@ -276,15 +276,20 @@ async function drawObject(page, object, context) {
   return 0;
 }
 
-function outputRecord(name, bytes, pages) {
+function outputRecord(name, bytes, pages, fileId) {
   const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: "application/pdf" });
-  return { name, blob, size: blob.size, pages };
+  return { name, blob, size: blob.size, pages, fileId };
 }
 
 // files: [{ id, name }] — annotation objects carry their own fileId/srcIndex.
+//
+// `opts.sourceBytes` (a `{ [fileId]: Uint8Array }` map) replaces the loaded
+// source for a file, which is how the editor draws objects on top of a document
+// whose text was already rewritten in the same run.
 export async function annotatePdfs(files, opts = {}, onProgress) {
   const objects = (opts.objects || []).filter((object) => object && ANNOTATION_TYPES.includes(object.type));
   const customBase = opts.outputName ? sanitizePdfBaseName(opts.outputName) : "";
+  const sourceBytes = opts.sourceBytes || {};
   const dedupe = createNameDeduper();
   const outputs = [];
   let droppedCharacters = 0;
@@ -292,8 +297,9 @@ export async function annotatePdfs(files, opts = {}, onProgress) {
   for (let f = 0; f < files.length; f += 1) {
     const file = files[f];
     const record = PdfEngine.files.get(file.id);
-    if (!record) continue;
-    const doc = await PDFDocument.load(record.bytes, { ignoreEncryption: true });
+    const bytes = sourceBytes[file.id] || record?.bytes;
+    if (!bytes) continue;
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
     const pages = doc.getPages();
     const fonts = new Map();
     const byPage = new Map();
@@ -321,7 +327,7 @@ export async function annotatePdfs(files, opts = {}, onProgress) {
     const name = customBase
       ? (files.length > 1 ? `${customBase}-${f + 1}.pdf` : `${customBase}.pdf`)
       : `${fallbackBase}-diedit.pdf`;
-    outputs.push(outputRecord(dedupe(name), await doc.save(), pages.length));
+    outputs.push(outputRecord(dedupe(name), await doc.save(), pages.length, file.id));
   }
 
   if (onProgress) onProgress(100);

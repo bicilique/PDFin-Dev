@@ -7,6 +7,9 @@ export const SELF_HOSTED_PATH = "/self-hosted/";
 const TOOL_PATH_ALIASES = {
   paraf: "sign",
   sign: "sign",
+  // Text editing used to be a separate tool; it is now a mode of Edit PDF, and
+  // the old links keep working.
+  textedit: "edit",
 };
 
 export function normalizeHash(hash = "") {
@@ -14,7 +17,7 @@ export function normalizeHash(hash = "") {
 }
 
 export function getToolFromHash(hash = window.location.hash) {
-  const tool = normalizeHash(hash);
+  const tool = TOOL_PATH_ALIASES[normalizeHash(hash)] || normalizeHash(hash);
   return WORKSPACE_TOOL_IDS.includes(tool) ? tool : null;
 }
 

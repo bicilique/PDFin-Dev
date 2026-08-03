@@ -163,23 +163,13 @@ const toolSeoCopy = {
   edit: {
     title: "Edit PDF online | PDFin",
     h1: "Edit PDF",
-    description: "Tambahkan teks, gambar, bentuk, stabilo, dan coretan ke halaman PDF langsung di browser.",
-    intro: "Edit PDF membubuhkan lapisan visual pada halaman tanpa mengunggah dokumen ke server PDFin.",
-    howItWorks: ["Tambahkan satu file PDF.", "Pilih alat teks, gambar, bentuk, stabilo, atau coretan.", "Atur posisi objek di halaman lalu unduh hasilnya."],
+    description: "Ubah teks yang sudah ada di dalam PDF, lalu tambahkan teks, gambar, bentuk, stabilo, dan coretan langsung di browser.",
+    intro: "Satu editor untuk dua kebutuhan: menulis ulang kalimat yang sudah ada di halaman, dan menambahkan objek baru di atasnya, tanpa mengunggah dokumen ke server PDFin.",
+    howItWorks: ["Tambahkan satu file PDF.", "Klik teks pada halaman lalu ketik langsung, atau pilih alat teks, gambar, bentuk, stabilo, dan coretan.", "Unduh PDF dengan hasil editan Anda."],
     faq: [
-      ["Apakah teks asli PDF bisa diubah?", "Belum. Editor menambahkan objek baru di atas halaman; gunakan kotak putih untuk menutup konten lama."],
+      ["Apakah teks asli PDF bisa diubah?", "Ya. Mode Edit teks asli menulis ulang teks pada halaman; font aslinya dipertahankan selama font itu memuat semua karakter yang Anda ketik."],
+      ["Mengapa sebagian teks tidak bisa diklik?", "Teks yang diputar, lapisan OCR tak terlihat, atau font tanpa peta karakter ditandai hanya-baca agar hasilnya tidak rusak. Gunakan objek teks baru untuk kasus itu."],
       ["Apakah file diunggah ke server?", "Tidak. Semua editan diterapkan lokal di browser dengan pdf-lib."],
-    ],
-  },
-  textedit: {
-    title: "Edit teks PDF online | PDFin",
-    h1: "Edit teks PDF",
-    description: "Ubah teks yang sudah ada di dalam PDF langsung di browser, dengan font aslinya bila memungkinkan.",
-    intro: "Edit Teks PDF menulis ulang teks pada halaman, bukan menempelkan kotak baru di atasnya.",
-    howItWorks: ["Tambahkan satu file PDF.", "Klik teks pada halaman lalu ubah isinya.", "Unduh PDF dengan teks yang sudah diperbarui."],
-    faq: [
-      ["Apakah font aslinya dipertahankan?", "Ya, selama font itu memuat semua karakter yang Anda ketik. Jika tidak, teks digambar ulang dengan font pengganti yang paling mirip."],
-      ["Mengapa sebagian teks tidak bisa diklik?", "Teks yang diputar, lapisan OCR tak terlihat, atau font tanpa peta karakter ditandai hanya-baca agar hasilnya tidak rusak."],
     ],
   },
   redact: {

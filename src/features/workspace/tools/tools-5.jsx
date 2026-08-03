@@ -1,19 +1,27 @@
 import React from "react";
 import { Alert, Button, Input, Select, Switch } from "../../../components/index.js";
 import { Field, Segmented, SliderRow, TX, TOOL_DEFS, getOutputNameError, getPdfOutputName, outputNameValue, OutputNameField } from "./tools-1.jsx";
+import { TextEditControls, TextRunLayer, clearTextRunCache } from "./tools-7.jsx";
 import { PdfProcess } from "../engine/pdfProcess.js";
 
-// PDFin workspace — tool defs part 5: visual PDF editor (annotation layer).
+// PDFin workspace — tool defs part 5: the PDF editor.
+//
+// One tool covers both kinds of editing a PDF page needs:
+//
+//   * "content" mode edits the text the document already contains, by rewriting
+//     the page's content stream (see `tools-7.jsx` and `engine/pdfTextEdit.js`).
+//   * every other mode adds a new object on top of the page — text, image,
+//     shape, highlight, or freehand (see `engine/pdfAnnotate.js`).
 //
 // Every object lives in normalized page coordinates (0..1, origin top-left of
 // the page as shown in the preview) so the same numbers drive both the DOM
-// overlay and the pdf-lib export in `engine/pdfAnnotate.js`.
+// overlay and the pdf-lib export.
 
 // Text size is authored in points against an A4-height reference and stored as
 // a fraction of page height, so a box keeps its relative size on any page size.
 const A4_HEIGHT_PT = 842;
 
-export const EDITOR_MODES = ["select", "text", "image", "highlight", "rect", "ellipse", "line", "draw"];
+export const EDITOR_MODES = ["content", "select", "text", "image", "highlight", "rect", "ellipse", "line", "draw"];
 
 const CSS_FONTS = {
   sans: "Helvetica, Arial, sans-serif",
@@ -162,11 +170,11 @@ function pointFromEvent(event, element) {
   };
 }
 
-function ObjectView({ object, selected, pageHeight, onSelect, onDragStart }) {
+function ObjectView({ object, selected, editing, interactive = true, pageHeight, lang, onSelect, onDragStart, onEdit, onEditText, onEditDone }) {
   const common = {
     position: "absolute",
-    pointerEvents: "auto",
-    cursor: "grab",
+    pointerEvents: interactive ? "auto" : "none",
+    cursor: interactive ? "grab" : "default",
     outline: selected ? "1.5px dashed var(--border-brand)" : "none",
     outlineOffset: 2,
   };
@@ -188,7 +196,7 @@ function ObjectView({ object, selected, pageHeight, onSelect, onDragStart }) {
         <line x1={from.x * 100} y1={from.y * 100} x2={to.x * 100} y2={to.y * 100}
           stroke={object.stroke} strokeWidth={Math.max(0.3, object.strokeWidth / 6)} strokeLinecap="round"
           vectorEffect="non-scaling-stroke" opacity={object.opacity ?? 1}
-          style={{ pointerEvents: "stroke", cursor: "grab", strokeWidth: Math.max(2, object.strokeWidth) }}
+          style={{ pointerEvents: interactive ? "stroke" : "none", cursor: interactive ? "grab" : "default", strokeWidth: Math.max(2, object.strokeWidth) }}
           onPointerDown={(event) => start(event, "move")} />
         {object.arrow && <ArrowHead from={from} to={to} object={object} />}
         {selected && <circle cx={to.x * 100} cy={to.y * 100} r={1.4} fill="var(--surface-card)" stroke="var(--border-brand)"
@@ -204,7 +212,7 @@ function ObjectView({ object, selected, pageHeight, onSelect, onDragStart }) {
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
         <polyline points={points} fill="none" stroke={object.stroke} strokeLinecap="round" strokeLinejoin="round"
           opacity={object.opacity ?? 1} vectorEffect="non-scaling-stroke"
-          style={{ pointerEvents: "stroke", cursor: "grab", strokeWidth: Math.max(2, object.strokeWidth) }}
+          style={{ pointerEvents: interactive ? "stroke" : "none", cursor: interactive ? "grab" : "default", strokeWidth: Math.max(2, object.strokeWidth) }}
           onPointerDown={(event) => start(event, "move")} />
       </svg>
     );
@@ -212,14 +220,49 @@ function ObjectView({ object, selected, pageHeight, onSelect, onDragStart }) {
 
   if (object.type === "text") {
     const fontSize = Math.max(6, (object.sizePct || 0.02) * pageHeight);
+    const typography = {
+      color: object.color,
+      textAlign: object.align || "left",
+      font: `${object.italic ? "italic " : ""}${object.bold ? 700 : 400} ${fontSize}px/1.2 ${CSS_FONTS[object.fontFamily] || CSS_FONTS.sans}`,
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+    };
+
+    // A text box is typed into where it sits on the page; the inspector field
+    // stays available but is never the only way in.
+    if (editing) {
+      return (
+        <textarea
+          autoFocus
+          value={object.text || ""}
+          aria-label={TX(lang, "Isi teks", "Text content")}
+          onChange={(event) => onEditText(event.target.value)}
+          onBlur={onEditDone}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
+          style={{
+            ...common, ...box, ...typography,
+            height: "auto", minHeight: fontSize * 1.4,
+            padding: 0, margin: 0, resize: "none", overflow: "hidden", cursor: "text",
+            background: "color-mix(in srgb, var(--action-primary) 6%, transparent)",
+            border: "1.5px solid var(--border-brand)", borderRadius: 2, outline: "none",
+          }}
+        />
+      );
+    }
+
     return (
-      <div onPointerDown={(event) => start(event, "move")} style={{
-        ...common, ...box, height: "auto", minHeight: fontSize * 1.2,
-        color: object.color, textAlign: object.align || "left",
-        font: `${object.italic ? "italic " : ""}${object.bold ? 700 : 400} ${fontSize}px/1.2 ${CSS_FONTS[object.fontFamily] || CSS_FONTS.sans}`,
-        whiteSpace: "pre-wrap", wordBreak: "break-word", overflow: "hidden",
+      <div onPointerDown={(event) => start(event, "move")} onDoubleClick={onEdit} style={{
+        ...common, ...box, ...typography, height: "auto", minHeight: fontSize * 1.2, overflow: "hidden",
       }}>
-        {object.text || ""}
+        {object.text || (
+          <span style={{ opacity: 0.55, fontStyle: "italic" }}>{TX(lang, "Klik dua kali untuk mengetik", "Double-click to type")}</span>
+        )}
         {handle}
       </div>
     );
@@ -260,13 +303,40 @@ function ArrowHead({ from, to, object }) {
   return <polygon points={points} fill={object.stroke} opacity={object.opacity ?? 1} style={{ pointerEvents: "none" }} />;
 }
 
-function AnnotationLayer({ page, opts, setOpts, lang }) {
+function AnnotationLayer({ page, opts, setOpts, lang, interactive = true }) {
   const ref = React.useRef(null);
   const [size, setSize] = React.useState({ width: 0, height: 0 });
   const [draft, setDraft] = React.useState(null);
-  const mode = opts.mode || "select";
+  const beforeEdit = React.useRef(null);
+  const mode = interactive ? (opts.mode || "select") : "content";
   const style = opts.style || defaultEditorStyle();
   const pageObjects = (opts.objects || []).filter((object) => object.fileId === page.fileId && object.srcIndex === page.srcIndex);
+  const editingId = interactive ? opts.editingId || null : null;
+
+  const startEditing = (id, objects) => {
+    beforeEdit.current = objects;
+    setOpts((current) => ({ ...current, editingId: id, selectedId: id, mode: "select" }));
+  };
+
+  // Typing is one undo step, and a box nobody typed into is not worth keeping.
+  const finishEditing = () => {
+    const snapshot = beforeEdit.current;
+    beforeEdit.current = null;
+    setOpts((current) => {
+      const edited = (current.objects || []).find((object) => object.id === current.editingId);
+      const dropped = edited && !String(edited.text || "").trim();
+      const objects = dropped ? (current.objects || []).filter((object) => object.id !== edited.id) : current.objects;
+      const keepHistory = snapshot && !dropped;
+      return {
+        ...current,
+        objects,
+        editingId: null,
+        selectedId: dropped ? null : current.selectedId,
+        past: keepHistory ? [...(current.past || []), snapshot].slice(-40) : current.past,
+        future: keepHistory ? [] : current.future,
+      };
+    });
+  };
 
   React.useEffect(() => {
     const element = ref.current;
@@ -341,7 +411,10 @@ function AnnotationLayer({ page, opts, setOpts, lang }) {
       setDraft(null);
       const object = buildFromDraft(mode, style, page, origin, current, path, opts);
       if (!object) return;
-      commit(opts, setOpts, [...(opts.objects || []), object], { selectedId: object.id, mode: "select" });
+      const objects = [...(opts.objects || []), object];
+      commit(opts, setOpts, objects, { selectedId: object.id, mode: "select" });
+      // A new text box opens straight into typing — no second click needed.
+      if (object.type === "text") startEditing(object.id, objects);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -351,17 +424,21 @@ function AnnotationLayer({ page, opts, setOpts, lang }) {
 
   return (
     <div ref={ref} data-annot-page style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      {mode !== "select" && (
+      {mode !== "select" && mode !== "content" && (
         <div onPointerDown={startCreate} aria-label={TX(lang, "Area gambar anotasi", "Annotation drawing area")} style={{
           position: "absolute", inset: 0, pointerEvents: "auto", cursor: "crosshair",
           background: "color-mix(in srgb, var(--action-primary) 4%, transparent)",
         }} />
       )}
       {pageObjects.map((object) => (
-        <ObjectView key={object.id} object={object} pageHeight={size.height}
-          selected={opts.selectedId === object.id && mode === "select"}
+        <ObjectView key={object.id} object={object} pageHeight={size.height} lang={lang} interactive={interactive}
+          selected={interactive && opts.selectedId === object.id && mode === "select"}
+          editing={editingId === object.id}
           onSelect={() => setOpts({ ...opts, selectedId: object.id })}
-          onDragStart={(event, dragMode) => dragObject(event, object, dragMode)} />
+          onDragStart={(event, dragMode) => interactive && dragObject(event, object, dragMode)}
+          onEdit={() => object.type === "text" && startEditing(object.id, opts.objects || [])}
+          onEditText={(text) => updateObject(opts, setOpts, object.id, (current) => ({ ...current, text }), { history: false })}
+          onEditDone={finishEditing} />
       ))}
       {draftBox && (
         <div aria-hidden="true" style={{
@@ -394,7 +471,9 @@ function buildFromDraft(mode, style, page, origin, current, path, opts) {
   const dragged = Math.abs(current.x - origin.x) > 0.01 || Math.abs(current.y - origin.y) > 0.01;
   if (mode === "text") {
     const rect = dragged ? normalizeDragRect(origin, current) : { x: clamp(origin.x, 0, 0.6), y: clamp(origin.y, 0, 0.95), w: 0.4, h: 0.08 };
-    return createObject("text", style, page, { rect }, { text: TX(opts.lang || "id", "Teks baru", "New text") });
+    // Created empty: the box opens in typing mode, so placeholder words would
+    // only have to be deleted again.
+    return createObject("text", style, page, { rect }, { text: "" });
   }
   if (mode === "image") {
     const aspect = opts.imageSource?.aspect || 1;
@@ -411,8 +490,11 @@ function buildFromDraft(mode, style, page, origin, current, path, opts) {
 
 function ModePicker({ lang, value, onChange }) {
   const modes = [
+    // Editing the text the PDF already has comes first: it is what most people
+    // mean by "edit this PDF".
+    ["content", TX(lang, "Edit teks asli", "Edit existing text")],
     ["select", TX(lang, "Pilih", "Select")],
-    ["text", TX(lang, "Teks", "Text")],
+    ["text", TX(lang, "Teks baru", "New text")],
     ["image", TX(lang, "Gambar", "Image")],
     ["highlight", TX(lang, "Stabilo", "Highlight")],
     ["rect", TX(lang, "Kotak", "Box")],
@@ -421,7 +503,7 @@ function ModePicker({ lang, value, onChange }) {
     ["draw", TX(lang, "Coretan", "Draw")],
   ];
   return (
-    <div role="radiogroup" aria-label={TX(lang, "Alat edit", "Edit tool")} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+    <div role="radiogroup" aria-label={TX(lang, "Alat edit", "Edit tool")} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
       {modes.map(([id, label]) => {
         const active = value === id;
         return (
@@ -529,19 +611,39 @@ function SelectedControls({ lang, opts, setOpts, selected }) {
   );
 }
 
+function modeHint(lang, mode) {
+  if (mode === "content") return TX(lang, "Klik teks di halaman lalu langsung ketik.", "Click text on the page and type straight away.");
+  if (mode === "select") return TX(lang, "Klik objek untuk memilih, seret untuk memindahkan, klik dua kali teks untuk mengetik.", "Click an object to select it, drag to move, double-click text to type.");
+  if (mode === "text") return TX(lang, "Klik atau seret di halaman, lalu langsung ketik.", "Click or drag on the page, then type straight away.");
+  return TX(lang, "Seret di halaman untuk menggambar objek.", "Drag on the page to draw the object.");
+}
+
+function editSummary(lang, opts) {
+  const objects = (opts.objects || []).length;
+  const changes = (opts.changes || []).length;
+  const parts = [];
+  if (changes) parts.push(TX(lang, `${changes} perubahan teks`, `${changes} text change${changes === 1 ? "" : "s"}`));
+  if (objects) parts.push(TX(lang, `${objects} objek`, `${objects} object${objects === 1 ? "" : "s"}`));
+  return parts.join(" · ");
+}
+
 TOOL_DEFS.edit = {
   view: "preview",
   previewKind: "processed",
   defaults: {
-    objects: [], selectedId: null, mode: "select", style: defaultEditorStyle(),
-    imageSource: null, whiteout: false, arrow: true,
+    objects: [], changes: [], selectedId: null, selectedRun: null, editingId: null,
+    mode: "content", style: defaultEditorStyle(),
+    imageSource: null, whiteout: false, arrow: true, fitWidth: true,
     past: [], future: [], outputName: "", loadedFor: null,
   },
+  // The preview only has to be re-announced when the document actually changes,
+  // not on every style tweak or selection.
+  previewKey: (opts) => `${(opts.objects || []).length}:${(opts.changes || []).map((change) => `${change.fileId}:${change.srcIndex}:${change.opIndex}=${change.text}`).join("|")}`,
   Panel: ({ lang, opts, setOpts, ctx }) => {
     const imageRef = React.useRef(null);
     const file = ctx.files[0];
     const style = opts.style || defaultEditorStyle();
-    const mode = opts.mode || "select";
+    const mode = opts.mode || "content";
     const objects = opts.objects || [];
     const selected = objects.find((object) => object.id === opts.selectedId) || null;
     // Whether a character is drawable depends on the embedded app font, so the
@@ -564,7 +666,12 @@ TOOL_DEFS.edit = {
 
     React.useEffect(() => {
       if (file?.id && opts.loadedFor !== file.id) {
-        setOpts((next) => next.loadedFor === file.id ? next : { ...next, outputName: outputNameValue(ctx, "diedit"), loadedFor: file.id });
+        // A different document means different text runs, so the parsed pages
+        // and every edit made against them are dropped.
+        clearTextRunCache();
+        setOpts((next) => next.loadedFor === file.id
+          ? next
+          : { ...next, outputName: outputNameValue(ctx, "diedit"), loadedFor: file.id, changes: [], selectedRun: null, selectedId: null, editingId: null });
       }
     }, [file?.id]);
     React.useEffect(() => () => {
@@ -576,14 +683,20 @@ TOOL_DEFS.edit = {
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Alert tone="info">{TX(lang,
-          "Editor menambahkan lapisan visual di atas halaman: teks, gambar, bentuk, stabilo, dan coretan. Teks asli PDF tidak diubah — gunakan kotak putih (whiteout) untuk menutupinya.",
-          "The editor adds a visual layer on top of the page: text, images, shapes, highlights, and freehand marks. Existing PDF text is not modified — use a white box (whiteout) to cover it.")}</Alert>
-        <Field label={TX(lang, "Alat", "Tool")} hint={mode === "select"
-          ? TX(lang, "Klik objek untuk memilih, seret untuk memindahkan.", "Click an object to select it, drag to move.")
-          : TX(lang, "Seret di halaman untuk menggambar objek.", "Drag on the page to draw the object.")}>
-          <ModePicker lang={lang} value={mode} onChange={(next) => setOpts({ ...opts, mode: next, selectedId: next === "select" ? opts.selectedId : null })} />
+        <Field label={TX(lang, "Alat", "Tool")} hint={modeHint(lang, mode)}>
+          <ModePicker lang={lang} value={mode} onChange={(next) => setOpts({
+            ...opts,
+            mode: next,
+            selectedId: next === "select" ? opts.selectedId : null,
+            editingId: null,
+          })} />
         </Field>
+        {mode === "content" && <TextEditControls lang={lang} opts={opts} setOpts={setOpts} />}
+        {mode !== "content" && (
+          <Alert tone="info">{TX(lang,
+            "Mode ini menambahkan lapisan baru di atas halaman: teks, gambar, bentuk, stabilo, dan coretan. Untuk mengubah kalimat yang sudah ada di PDF, gunakan Edit teks asli.",
+            "This mode adds a new layer on top of the page: text, images, shapes, highlights, and freehand marks. To change a sentence the PDF already contains, use Edit existing text.")}</Alert>
+        )}
         {mode === "image" && (
           <Field label={TX(lang, "File gambar", "Image file")} hint={opts.imageSource ? "" : TX(lang, "Pilih gambar dulu sebelum menggambar di halaman.", "Choose an image before drawing on the page.")}>
             <Button variant="secondary" size="sm" onClick={() => imageRef.current.click()}>
@@ -606,29 +719,33 @@ TOOL_DEFS.edit = {
             }} />
           </Field>
         )}
-        <StyleControls lang={lang} mode={mode} style={style} patchStyle={patchStyle} opts={opts} setOpts={setOpts} />
-        <SelectedControls lang={lang} opts={opts} setOpts={setOpts} selected={selected} />
-        <Field label={TX(lang, "Objek", "Objects")}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
-            <Button variant="ghost" size="sm" disabled={!(opts.past || []).length} onClick={() => undo(opts, setOpts)}>{TX(lang, "Urungkan", "Undo")}</Button>
-            <Button variant="ghost" size="sm" disabled={!(opts.future || []).length} onClick={() => redo(opts, setOpts)}>{TX(lang, "Ulangi", "Redo")}</Button>
-            <Button variant="ghost" size="sm" disabled={!objects.length} onClick={() => commit(opts, setOpts, [], { selectedId: null })}>{TX(lang, "Kosongkan", "Clear")}</Button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
-            {objects.length ? objects.map((object, index) => (
-              <button key={object.id} type="button" onClick={() => {
-                setOpts({ ...opts, selectedId: object.id, mode: "select" });
-                const pageIndex = ctx.pages.findIndex((page) => page.fileId === object.fileId && page.srcIndex === object.srcIndex);
-                if (pageIndex >= 0) ctx.goToPreviewPage?.(pageIndex + 1);
-              }} style={{
-                textAlign: "left", padding: "8px 10px", borderRadius: "var(--radius-md)",
-                border: `1px solid ${opts.selectedId === object.id ? "var(--border-brand)" : "var(--border-default)"}`,
-                background: opts.selectedId === object.id ? "var(--surface-brand-subtle)" : "var(--surface-card)",
-                color: "var(--text-heading)", cursor: "pointer", font: "var(--type-caption)",
-              }}>{objectLabel(lang, object, index)}</button>
-            )) : <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{TX(lang, "Belum ada objek.", "No objects yet.")}</span>}
-          </div>
-        </Field>
+        {mode !== "content" && (
+          <React.Fragment>
+            <StyleControls lang={lang} mode={mode} style={style} patchStyle={patchStyle} opts={opts} setOpts={setOpts} />
+            <SelectedControls lang={lang} opts={opts} setOpts={setOpts} selected={selected} />
+            <Field label={TX(lang, "Objek", "Objects")}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                <Button variant="ghost" size="sm" disabled={!(opts.past || []).length} onClick={() => undo(opts, setOpts)}>{TX(lang, "Urungkan", "Undo")}</Button>
+                <Button variant="ghost" size="sm" disabled={!(opts.future || []).length} onClick={() => redo(opts, setOpts)}>{TX(lang, "Ulangi", "Redo")}</Button>
+                <Button variant="ghost" size="sm" disabled={!objects.length} onClick={() => commit(opts, setOpts, [], { selectedId: null })}>{TX(lang, "Kosongkan", "Clear")}</Button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+                {objects.length ? objects.map((object, index) => (
+                  <button key={object.id} type="button" onClick={() => {
+                    setOpts({ ...opts, selectedId: object.id, mode: "select", editingId: null });
+                    const pageIndex = ctx.pages.findIndex((page) => page.fileId === object.fileId && page.srcIndex === object.srcIndex);
+                    if (pageIndex >= 0) ctx.goToPreviewPage?.(pageIndex + 1);
+                  }} style={{
+                    textAlign: "left", padding: "8px 10px", borderRadius: "var(--radius-md)",
+                    border: `1px solid ${opts.selectedId === object.id ? "var(--border-brand)" : "var(--border-default)"}`,
+                    background: opts.selectedId === object.id ? "var(--surface-brand-subtle)" : "var(--surface-card)",
+                    color: "var(--text-heading)", cursor: "pointer", font: "var(--type-caption)",
+                  }}>{objectLabel(lang, object, index)}</button>
+                )) : <span style={{ font: "var(--type-caption)", color: "var(--text-faint)" }}>{TX(lang, "Belum ada objek.", "No objects yet.")}</span>}
+              </div>
+            </Field>
+          </React.Fragment>
+        )}
         {dropped > 0 && (
           <Alert tone="warning">{TX(lang,
             `${dropped} karakter tidak tersedia di font mana pun yang dibawa PDFin dan akan dilewati saat diproses.`,
@@ -639,27 +756,56 @@ TOOL_DEFS.edit = {
       </div>
     );
   },
-  overlay: (opts, setOpts) => (page) => (
-    <AnnotationLayer page={page} opts={opts} setOpts={setOpts} lang={opts.lang || "id"} />
-  ),
-  disabled: (ctx, opts, lang = "id") => !(opts.objects || []).length || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "diedit"), lang),
+  // Both layers are always mounted: whichever one is not the active tool still
+  // shows its work, so the preview always reflects the document you will get.
+  overlay: (opts, setOpts) => (page) => {
+    const mode = opts.mode || "content";
+    return (
+      <React.Fragment>
+        <TextRunLayer page={page} opts={opts} setOpts={setOpts} lang={opts.lang || "id"} interactive={mode === "content"} />
+        <AnnotationLayer page={page} opts={opts} setOpts={setOpts} lang={opts.lang || "id"} interactive={mode !== "content"} />
+      </React.Fragment>
+    );
+  },
+  disabled: (ctx, opts, lang = "id") => (!(opts.objects || []).length && !(opts.changes || []).length)
+    || !!getOutputNameError(opts.outputName || outputNameValue(ctx, "diedit"), lang),
   disabledReason: (ctx, opts, t, lang) => getOutputNameError(opts.outputName || outputNameValue(ctx, "diedit"), lang)
-    || TX(lang, "Tambahkan minimal satu objek ke halaman.", "Add at least one object to a page."),
+    || TX(lang, "Ubah teks di halaman atau tambahkan minimal satu objek.", "Change text on the page or add at least one object."),
   actionLabel: (ctx, opts, t, lang) => TX(lang, "Terapkan editan", "Apply edits"),
-  nextAction: (ctx, opts, t, lang) => TX(lang, "Editan diterapkan secara lokal di browser Anda.", "Edits are applied locally in your browser."),
+  nextAction: (ctx, opts, t, lang) => {
+    const summary = editSummary(lang, opts);
+    return summary
+      ? TX(lang, `${summary} akan diterapkan secara lokal di browser Anda.`, `${summary} will be applied locally in your browser.`)
+      : TX(lang, "Editan diterapkan secara lokal di browser Anda.", "Edits are applied locally in your browser.");
+  },
   successSummary: (result, ctx, opts, t, lang) => {
-    const count = (opts.objects || []).length;
-    const pages = new Set((opts.objects || []).map((object) => `${object.fileId}:${object.srcIndex}`)).size;
-    const skipped = result.droppedCharacters
-      ? TX(lang, ` ${result.droppedCharacters} karakter tidak didukung dilewati.`, ` ${result.droppedCharacters} unsupported character${result.droppedCharacters === 1 ? "" : "s"} skipped.`)
-      : "";
-    return TX(lang,
-      `${count} objek diterapkan pada ${pages} halaman.${skipped}`,
-      `${count} object${count === 1 ? "" : "s"} applied across ${pages} page${pages === 1 ? "" : "s"}.${skipped}`);
+    const objects = (opts.objects || []).length;
+    const objectPages = new Set((opts.objects || []).map((object) => `${object.fileId}:${object.srcIndex}`)).size;
+    const parts = [];
+    if (objects) {
+      parts.push(TX(lang,
+        `${objects} objek diterapkan pada ${objectPages} halaman.`,
+        `${objects} object${objects === 1 ? "" : "s"} applied across ${objectPages} page${objectPages === 1 ? "" : "s"}.`));
+    }
+    if (result.sameFont) {
+      parts.push(TX(lang, `${result.sameFont} teks ditulis ulang dengan font aslinya.`, `${result.sameFont} text run${result.sameFont === 1 ? "" : "s"} rewritten with the original font.`));
+    }
+    if (result.redrawn) {
+      parts.push(TX(lang, `${result.redrawn} teks digambar ulang dengan font pengganti.`, `${result.redrawn} text run${result.redrawn === 1 ? "" : "s"} redrawn with a substitute font.`));
+    }
+    if (result.skipped) {
+      parts.push(TX(lang, `${result.skipped} perubahan dilewati karena teksnya tidak dapat diedit.`, `${result.skipped} change${result.skipped === 1 ? "" : "s"} skipped because the text could not be edited.`));
+    }
+    if (result.droppedCharacters) {
+      parts.push(TX(lang, `${result.droppedCharacters} karakter tidak didukung dilewati.`, `${result.droppedCharacters} unsupported character${result.droppedCharacters === 1 ? "" : "s"} skipped.`));
+    }
+    return parts.length ? parts.join(" ") : TX(lang, "Tidak ada perubahan yang diterapkan.", "No changes were applied.");
   },
   outName: (lang, opts = {}) => getPdfOutputName(opts.outputName || TX(lang, "dokumen-diedit", "edited-document"), lang),
-  process: (ctx, opts, onProgress, lang) => PdfProcess.annotate(ctx.files, {
+  process: (ctx, opts, onProgress, lang) => PdfProcess.editDocument(ctx.files, {
     objects: opts.objects,
+    changes: opts.changes,
+    fitWidth: opts.fitWidth !== false,
     outputName: getPdfOutputName(opts.outputName || outputNameValue(ctx, "diedit"), lang),
   }, onProgress),
 };

@@ -703,9 +703,30 @@ import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
     return applyTextEdits(files, { ...opts, edits }, onProgress);
   }
 
+  // The PDF editor can do both kinds of edit in one pass: rewrite the text a
+  // page already carries, then draw the new objects on top of the result.
+  async function editDocument(files, opts = {}, onProgress) {
+    const hasTextChanges = !!(opts.changes || []).length;
+    const hasObjects = !!(opts.objects || []).length;
+    if (!hasTextChanges) return annotate(files, opts, onProgress);
+    if (!hasObjects) return editText(files, opts, onProgress);
+
+    const textResult = await editText(files, opts, (pct) => onProgress && onProgress(pct * 0.5));
+    const sourceBytes = {};
+    for (const output of textResult.outputs) {
+      if (output.fileId && output.bytes) sourceBytes[output.fileId] = output.bytes;
+    }
+    const drawResult = await annotate(files, { ...opts, sourceBytes }, (pct) => onProgress && onProgress(50 + pct * 0.5));
+    return {
+      ...textResult,
+      ...drawResult,
+      droppedCharacters: (textResult.droppedCharacters || 0) + (drawResult.droppedCharacters || 0),
+    };
+  }
+
 export const PdfProcess = {
     clearCache, assemble, split, parseRange, compress, watermark, imagesToPdf,
     pdfToImages, pageNumbers, flatten, metadata, readMetadata, sign, protect,
-    ocr, pdfToDocx, annotate, redact, editText, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
+    ocr, pdfToDocx, annotate, redact, editText, editDocument, passthrough, hasDigitalSignatureMarkers, hasEncryptionMarkers,
     sourceHasDigitalSignature, sourceHasEncryption,
   };

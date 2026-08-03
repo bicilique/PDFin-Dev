@@ -1,4 +1,5 @@
 import { PDFArray, PDFDict, PDFName, PDFNumber, StandardFonts } from "pdf-lib";
+import { cssFontStack, identifyFont } from "./fontCatalog.js";
 
 // PDFin workspace — glyph width lookup for content-stream geometry.
 //
@@ -140,29 +141,59 @@ function readCidWidths(descendant) {
   return { table, defaultWidth: defaultWidth === null ? 1 : defaultWidth / 1000 };
 }
 
-// Summary used to pick a visually close replacement font when an edit cannot be
-// re-encoded into the original one.
+const EMPTY_DESCRIPTION = {
+  subtype: "", baseFont: "", serif: false, bold: false, italic: false, fixedPitch: false,
+  family: "sans", id: "", label: "", styleLabel: "", css: cssFontStack({ family: "sans" }),
+  weight: 400, symbolic: false, matched: false,
+};
+
+// Summary used to preview an edit in something close to the original typeface
+// and to pick a visually close replacement font when an edit cannot be
+// re-encoded into the font the page already carries.
+//
+// The BaseFont name is read against the popular-font catalog first, because it
+// is the only place a document says "this is Calibri Light" or "this is Georgia
+// Bold Italic". The descriptor's own flags then fill in or override whatever the
+// name did not say — they are authoritative when present.
 export function describeFont(fontDict) {
-  if (!(fontDict instanceof PDFDict)) return { subtype: "", baseFont: "", serif: false, bold: false, italic: false, fixedPitch: false };
+  if (!(fontDict instanceof PDFDict)) return { ...EMPTY_DESCRIPTION };
   const baseFont = stripSubsetPrefix(nameOf(fontDict.lookup(PDFName.of("BaseFont"))) || "");
-  const lower = baseFont.toLowerCase();
+  const identified = identifyFont(baseFont);
   let descriptor = fontDict.lookup(PDFName.of("FontDescriptor"));
   if (!(descriptor instanceof PDFDict)) {
     const descendants = fontDict.lookup(PDFName.of("DescendantFonts"));
     const descendant = descendants instanceof PDFArray ? descendants.lookup(0) : null;
     descriptor = descendant instanceof PDFDict ? descendant.lookup(PDFName.of("FontDescriptor")) : null;
   }
-  const flags = descriptor instanceof PDFDict ? (numberOf(descriptor.lookup(PDFName.of("Flags"))) || 0) : 0;
-  const italicAngle = descriptor instanceof PDFDict ? (numberOf(descriptor.lookup(PDFName.of("ItalicAngle"))) || 0) : 0;
-  const weight = descriptor instanceof PDFDict ? (numberOf(descriptor.lookup(PDFName.of("StemV"))) || 0) : 0;
+  const hasDescriptor = descriptor instanceof PDFDict;
+  const flags = hasDescriptor ? (numberOf(descriptor.lookup(PDFName.of("Flags"))) || 0) : 0;
+  const italicAngle = hasDescriptor ? (numberOf(descriptor.lookup(PDFName.of("ItalicAngle"))) || 0) : 0;
+  const stemV = hasDescriptor ? (numberOf(descriptor.lookup(PDFName.of("StemV"))) || 0) : 0;
+  const declaredWeight = hasDescriptor ? (numberOf(descriptor.lookup(PDFName.of("FontWeight"))) || 0) : 0;
+
+  // Flag bit 2 is serif, bit 1 is fixed pitch, bit 7 is italic, bit 3 is
+  // symbolic (1-based).
+  const fixedPitch = !!(flags & 0b1) || identified.fixedPitch;
+  const serif = !fixedPitch && (!!(flags & 0b10) || identified.serif);
+  const weight = declaredWeight || (identified.weight !== 400 ? identified.weight : stemV >= 120 ? 700 : 400);
+  const family = fixedPitch ? "mono" : serif ? "serif" : identified.family === "mono" || identified.family === "serif" ? "sans" : identified.family;
+
   return {
     subtype: nameOf(fontDict.lookup(PDFName.of("Subtype"))) || "",
     baseFont,
-    // Flag bit 2 is serif, bit 1 is fixed pitch, bit 7 is italic (1-based).
-    serif: !!(flags & 0b10) || /times|serif|georgia|garamond|book/.test(lower),
-    fixedPitch: !!(flags & 0b1) || /courier|mono/.test(lower),
-    bold: /bold|black|heavy/.test(lower) || weight >= 120,
-    italic: !!(flags & 0b1000000) || italicAngle !== 0 || /italic|oblique/.test(lower),
+    serif,
+    fixedPitch,
+    bold: weight >= 600,
+    italic: !!(flags & 0b1000000) || italicAngle !== 0 || identified.italic,
+    // Everything the catalog could tell us about the typeface itself.
+    family,
+    id: identified.id,
+    label: identified.label,
+    styleLabel: identified.styleLabel,
+    css: identified.matched ? identified.css : cssFontStack({ family }),
+    weight,
+    symbolic: identified.symbolic || !!(flags & 0b100),
+    matched: identified.matched,
   };
 }
 

@@ -3,9 +3,9 @@ import { getPrivacyHref, getSelfHostedHref, getToolHref, PROTOTYPE_TOOL_IDS, WOR
 import { PDFIN_T } from "../workspace/i18n.js";
 
 const toolCategories = [
-  { id: "pages", tools: ["merge", "split", "organize", "edit", "textedit", "rotate", "pagenum"] },
+  { id: "pages", tools: ["merge", "split", "organize", "rotate", "pagenum"] },
   { id: "conversion", tools: ["compress", "img2pdf", "pdf2img", "pdf2docx", "md2pdf", "ocr"] },
-  { id: "security", tools: ["protect", "redact", "watermark", "metadata", "sign", "flatten", "unlock"] },
+  { id: "security", tools: ["protect", "watermark", "metadata", "sign", "flatten", "unlock"] },
 ];
 
 const factIcons = {
@@ -42,9 +42,9 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
           security: "Keamanan dan informasi",
         },
         categoryDesc: {
-          pages: "Gabungkan, pisahkan, susun, edit, putar, dan beri nomor halaman PDF.",
+          pages: "Gabungkan, pisahkan, susun, putar, dan beri nomor halaman PDF.",
           conversion: "Kurangi ukuran, ubah format, atau buat PDF hasil pindaian dapat dicari.",
-          security: "Tambahkan password, redaksi, watermark, paraf visual, metadata, dan flatten sesuai dukungan alat.",
+          security: "Tambahkan password, watermark, paraf visual, metadata, dan flatten sesuai dukungan alat.",
         },
         inDevelopment: "Dalam pengembangan",
         privacyTitle: "Batasan yang perlu diketahui",
@@ -76,9 +76,9 @@ export function HomeScreen({ lang, onOpenWorkspace }) {
           security: "Security and information",
         },
         categoryDesc: {
-          pages: "Merge, split, organize, edit, rotate, and number PDF pages.",
+          pages: "Merge, split, organize, rotate, and number PDF pages.",
           conversion: "Reduce size, convert formats, or make scanned PDFs searchable.",
-          security: "Add passwords, redaction, watermarks, visual initials, metadata, and flattening where supported.",
+          security: "Add passwords, watermarks, visual initials, metadata, and flattening where supported.",
         },
         inDevelopment: "In development",
         privacyTitle: "Known limits",

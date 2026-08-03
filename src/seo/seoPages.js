@@ -160,39 +160,6 @@ const toolSeoCopy = {
       ["Apakah perubahan diproses lokal?", "Ya. Alat inti PDFin diproses langsung di browser."],
     ],
   },
-  edit: {
-    title: "Edit PDF online | PDFin",
-    h1: "Edit PDF",
-    description: "Tambahkan teks, gambar, bentuk, stabilo, dan coretan ke halaman PDF langsung di browser.",
-    intro: "Edit PDF membubuhkan lapisan visual pada halaman tanpa mengunggah dokumen ke server PDFin.",
-    howItWorks: ["Tambahkan satu file PDF.", "Pilih alat teks, gambar, bentuk, stabilo, atau coretan.", "Atur posisi objek di halaman lalu unduh hasilnya."],
-    faq: [
-      ["Apakah teks asli PDF bisa diubah?", "Belum. Editor menambahkan objek baru di atas halaman; gunakan kotak putih untuk menutup konten lama."],
-      ["Apakah file diunggah ke server?", "Tidak. Semua editan diterapkan lokal di browser dengan pdf-lib."],
-    ],
-  },
-  textedit: {
-    title: "Edit teks PDF online | PDFin",
-    h1: "Edit teks PDF",
-    description: "Ubah teks yang sudah ada di dalam PDF langsung di browser, dengan font aslinya bila memungkinkan.",
-    intro: "Edit Teks PDF menulis ulang teks pada halaman, bukan menempelkan kotak baru di atasnya.",
-    howItWorks: ["Tambahkan satu file PDF.", "Klik teks pada halaman lalu ubah isinya.", "Unduh PDF dengan teks yang sudah diperbarui."],
-    faq: [
-      ["Apakah font aslinya dipertahankan?", "Ya, selama font itu memuat semua karakter yang Anda ketik. Jika tidak, teks digambar ulang dengan font pengganti yang paling mirip."],
-      ["Mengapa sebagian teks tidak bisa diklik?", "Teks yang diputar, lapisan OCR tak terlihat, atau font tanpa peta karakter ditandai hanya-baca agar hasilnya tidak rusak."],
-    ],
-  },
-  redact: {
-    title: "Redaksi PDF online | PDFin",
-    h1: "Redaksi PDF",
-    description: "Hapus permanen teks dan gambar rahasia dari PDF langsung di browser, bukan sekadar menutupinya.",
-    intro: "Redaksi PDF membuang isi yang ditandai dari halaman sehingga tidak dapat dipilih, disalin, atau diekstrak kembali.",
-    howItWorks: ["Tambahkan satu file PDF.", "Seret untuk menandai area rahasia di halaman.", "Unduh PDF yang isinya sudah dihapus di area tersebut."],
-    faq: [
-      ["Apakah teksnya benar-benar hilang?", "Ya. Karakter yang tertutup dihapus dari isi halaman; halaman yang tidak dapat dipastikan bersih otomatis diratakan menjadi gambar."],
-      ["Apakah file dikirim ke server?", "Tidak. Seluruh proses redaksi berjalan lokal di browser."],
-    ],
-  },
   sign: {
     title: "Paraf PDF online | PDFin",
     h1: "Tambahkan paraf dokumen PDF",

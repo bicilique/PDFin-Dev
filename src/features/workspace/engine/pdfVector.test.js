@@ -136,81 +136,8 @@ describe("extractPageGraphics", () => {
     expect(textColors).toEqual([]);
   });
 
-  it("reports a curved icon path as an art region instead of dropping it", async () => {
-    const page = operatorPage([
-      [OPS.setFillRGBColor, [30, 120, 200]],
-      [OPS.constructPath, [[OPS.moveTo, OPS.curveTo, OPS.curveTo], [200, 700, 210, 720, 230, 720, 240, 700, 230, 680, 210, 680, 200, 700], []]],
-      [OPS.fill, null],
-    ]);
-
-    const { shapes, artRegions } = await extractPageGraphics(page, 595, 842);
-
-    expect(shapes).toEqual([]);
-    expect(artRegions).toHaveLength(1);
-    expect(artRegions[0].left).toBeCloseTo(200, 5);
-    expect(artRegions[0].top).toBeCloseTo(842 - 720, 5);
-    expect(artRegions[0].width).toBeCloseTo(40, 5);
-    expect(artRegions[0].height).toBeCloseTo(40, 5);
-  });
-
-  it("merges the many subpaths of one icon into a single art region", async () => {
-    const stem = (x, y) => [OPS.constructPath, [[OPS.moveTo, OPS.lineTo, OPS.lineTo], [x, y, x + 2, y + 6, x + 4, y], []]];
-    const page = operatorPage([
-      [OPS.setFillRGBColor, [0, 0, 0]],
-      stem(100, 500),
-      [OPS.fill, null],
-      stem(105, 500),
-      [OPS.fill, null],
-      stem(110, 500),
-      [OPS.fill, null],
-    ]);
-
-    const { artRegions } = await extractPageGraphics(page, 595, 842);
-
-    expect(artRegions).toHaveLength(1);
-    expect(artRegions[0].width).toBeCloseTo(14, 5);
-  });
-
-  it("keeps a pattern fill as an art region so the gradient is not lost", async () => {
-    const page = operatorPage([
-      [OPS.setFillColorN, ["TilingPattern", null, {}]],
-      rectangle(10, 10, 100, 100),
-      [OPS.fill, null],
-    ]);
-
-    const { shapes, artRegions } = await extractPageGraphics(page, 595, 842);
-
-    expect(shapes).toEqual([]);
-    expect(artRegions).toEqual([{ left: 10, top: 732, width: 100, height: 100 }]);
-  });
-
-  it("records a stencil mask, which carries most vector icons", async () => {
-    const page = operatorPage([
-      [OPS.save, null],
-      [OPS.transform, [24, 0, 0, 24, 400, 760]],
-      [OPS.paintImageMaskXObject, [{ width: 32, height: 32 }]],
-      [OPS.restore, null],
-    ]);
-
-    const { artRegions } = await extractPageGraphics(page, 595, 842);
-
-    expect(artRegions).toEqual([{ left: 400, top: 842 - 784, width: 24, height: 24 }]);
-  });
-
-  it("leaves a page-sized patch to the normal flow rather than rasterising it", async () => {
-    const page = operatorPage([
-      [OPS.setFillColorN, ["Pattern", null, {}]],
-      rectangle(0, 0, 595, 842),
-      [OPS.fill, null],
-    ]);
-
-    const { artRegions } = await extractPageGraphics(page, 595, 842);
-
-    expect(artRegions).toEqual([]);
-  });
-
   it("survives pages without an operator list", async () => {
-    await expect(extractPageGraphics({}, 595, 842)).resolves.toEqual({ shapes: [], textColors: [], artRegions: [] });
+    await expect(extractPageGraphics({}, 595, 842)).resolves.toEqual({ shapes: [], textColors: [] });
   });
 });
 

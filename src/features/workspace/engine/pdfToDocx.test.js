@@ -150,44 +150,6 @@ describe("PdfProcess.pdfToDocx", () => {
     expect(xml).toContain('<w:rFonts w:ascii="Arial"');
   });
 
-  it("rasterises a vector icon that no rectangle could reproduce", async () => {
-    const page = digitalPage([
-      {
-        str: "Terverifikasi",
-        dir: "ltr",
-        transform: [11, 0, 0, 11, 120, 700],
-        width: 80,
-        height: 11,
-        fontName: "body",
-        hasEOL: true,
-      },
-    ]);
-    // A round check badge: a curve-built path plus a stencil mask, neither of
-    // which the flat-rectangle reader can express.
-    page.getOperatorList = vi.fn(async () => ({
-      fnArray: [OPS.setFillRGBColor, OPS.constructPath, OPS.fill, OPS.save, OPS.transform, OPS.paintImageMaskXObject, OPS.restore],
-      argsArray: [
-        [32, 160, 90],
-        [[OPS.moveTo, OPS.curveTo, OPS.curveTo], [90, 700, 90, 712, 108, 712, 108, 700, 108, 688, 90, 688, 90, 700], []],
-        null,
-        null,
-        [12, 0, 0, 12, 93, 694],
-        [{ width: 16, height: 16 }],
-        null,
-      ],
-    }));
-    page.render = vi.fn(() => ({ promise: Promise.resolve() }));
-    const file = addPdfRecord({ pages: [page] });
-
-    const result = await PdfProcess.pdfToDocx([file], { ocrMode: "off" });
-    const xml = await readDocumentXml(result.outputs[0].blob);
-
-    expect(result.conversion.vectorArtPages).toEqual([1]);
-    expect(page.render).toHaveBeenCalledTimes(1);
-    expect(xml).toContain("<w:drawing>");
-    expect(await readDocumentText(result.outputs[0].blob)).toContain("Terverifikasi");
-  });
-
   it("splits gap-free table rows along the column grid the PDF painted", async () => {
     // Chrome print-to-PDF emits each row as one text chunk with the spacing
     // baked in, so only the painted header cells reveal the column edges.

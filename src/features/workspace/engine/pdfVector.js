@@ -9,9 +9,6 @@ const MAX_SHAPES_PER_PAGE = 220;
 const MIN_SHAPE_SIDE_PT = 0.6;
 const MIN_POLYGON_SIDE_PT = 3;
 const PAGE_COVER_RATIO = 0.92;
-const MAX_ART_REGIONS_PER_PAGE = 24;
-const MIN_ART_SIDE_PT = 1.5;
-const ART_MERGE_GAP_PT = 3;
 
 function multiply(a, b) {
   return [
@@ -109,7 +106,6 @@ function subpathsOf(ops, coords) {
     if (op === OPS.rectangle) {
       subpaths.push({
         curved: false,
-        controls: [],
         rect: true,
         points: [
           [args[0], args[1]],
@@ -120,11 +116,11 @@ function subpathsOf(ops, coords) {
       });
       current = null;
     } else if (op === OPS.moveTo) {
-      current = { curved: false, controls: [], points: [[args[0], args[1]]] };
+      current = { curved: false, points: [[args[0], args[1]]] };
       subpaths.push(current);
     } else if (op === OPS.lineTo) {
       if (!current) {
-        current = { curved: false, controls: [], points: [] };
+        current = { curved: false, points: [] };
         subpaths.push(current);
       }
       current.points.push([args[0], args[1]]);
@@ -132,11 +128,6 @@ function subpathsOf(ops, coords) {
       current = null;
     } else if (current) {
       current.curved = true;
-      // Control points bound the curve, so they are kept apart for callers that
-      // need the area the ink can reach, not the on-path corners.
-      for (let offset = 0; offset + 1 < size - 2; offset += 2) {
-        current.controls.push([args[offset], args[offset + 1]]);
-      }
       current.points.push([args[size - 2], args[size - 1]]);
     }
   }
@@ -246,97 +237,25 @@ function pushShape(shapes, rect, rgb, pageWidth, pageHeight) {
   shapes.push({ left, top, width, height, color: rgbToHex(rgb) });
 }
 
-// Everything a DOCX cannot draw — icons, logos, curves, gradients, stencil
-// masks — is recorded as a page region so the caller can paint that patch as a
-// raster image instead of dropping the artwork.
-function pushArt(regions, bounds, clip, pageWidth, pageHeight) {
-  if (!bounds) return;
-  const box = clip ? intersect(bounds, clip) : bounds;
-  const left = Math.max(0, box.minX);
-  const bottom = Math.max(0, box.minY);
-  const right = Math.min(pageWidth, box.maxX);
-  const top = Math.min(pageHeight, box.maxY);
-  const width = right - left;
-  const height = top - bottom;
-  if (width < MIN_ART_SIDE_PT || height < MIN_ART_SIDE_PT) return;
-  // A page-sized patch is the whole page rendered twice, not an illustration.
-  if (width >= pageWidth * PAGE_COVER_RATIO && height >= pageHeight * PAGE_COVER_RATIO) return;
-  regions.push({ left, top: pageHeight - top, width, height });
-}
-
-// Art painted as many small ops (an icon is dozens of subpaths) is merged back
-// into the few patches a reader perceives, so each drawing is one image.
-function mergeArt(regions, limit = MAX_ART_REGIONS_PER_PAGE) {
-  const boxes = regions.map((region) => ({
-    left: region.left,
-    top: region.top,
-    right: region.left + region.width,
-    bottom: region.top + region.height,
-  }));
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let a = 0; a < boxes.length; a++) {
-      for (let b = a + 1; b < boxes.length; b++) {
-        const overlapX = Math.min(boxes[a].right, boxes[b].right) - Math.max(boxes[a].left, boxes[b].left);
-        const overlapY = Math.min(boxes[a].bottom, boxes[b].bottom) - Math.max(boxes[a].top, boxes[b].top);
-        if (overlapX < -ART_MERGE_GAP_PT || overlapY < -ART_MERGE_GAP_PT) continue;
-        boxes[a] = {
-          left: Math.min(boxes[a].left, boxes[b].left),
-          top: Math.min(boxes[a].top, boxes[b].top),
-          right: Math.max(boxes[a].right, boxes[b].right),
-          bottom: Math.max(boxes[a].bottom, boxes[b].bottom),
-        };
-        boxes.splice(b, 1);
-        b--;
-        merged = true;
-      }
-    }
-  }
-  return boxes
-    .map((box) => ({
-      left: box.left,
-      top: box.top,
-      width: box.right - box.left,
-      height: box.bottom - box.top,
-    }))
-    .filter((region) => region.width >= MIN_ART_SIDE_PT && region.height >= MIN_ART_SIDE_PT)
-    .sort((a, b) => b.width * b.height - a.width * a.height)
-    .slice(0, limit);
-}
-
-// The ink of a curve stays inside the hull of its on-path and control points.
-function artBounds(subpath, matrix) {
-  return boundsOf(subpath.controls?.length ? [...subpath.points, ...subpath.controls] : subpath.points, matrix);
-}
-
-function unitBounds(matrix) {
-  const { minX, minY, maxX, maxY } = boundsOf([[0, 0], [1, 0], [1, 1], [0, 1]], matrix);
-  return { minX, minY, maxX, maxY };
-}
-
 /**
- * @returns {Promise<{shapes: Array, textColors: Array, artRegions: Array}>}
+ * @returns {Promise<{shapes: Array, textColors: Array}>}
  * `shapes` are filled/stroked rectangles ready to be placed behind the text.
  * `textColors` are {x, y, color} samples taken at each text-drawing operator.
- * `artRegions` are page patches whose artwork only a raster image can carry.
  */
 export async function extractPageGraphics(page, pageWidth, pageHeight, options = {}) {
-  if (typeof page?.getOperatorList !== "function") return { shapes: [], textColors: [], artRegions: [] };
+  if (typeof page?.getOperatorList !== "function") return { shapes: [], textColors: [] };
   const OPS = pdfjsLib.OPS || {};
   let operatorList;
   try {
-    operatorList = options.operatorList || await page.getOperatorList();
+    operatorList = await page.getOperatorList();
   } catch {
-    return { shapes: [], textColors: [], artRegions: [] };
+    return { shapes: [], textColors: [] };
   }
   const fnArray = operatorList?.fnArray || [];
   const argsArray = operatorList?.argsArray || [];
 
   const shapes = [];
   const textColors = [];
-  const artRegions = [];
-  const wantsArt = options.art !== false;
   const stack = [];
   let matrix = [1, 0, 0, 1, 0, 0];
   let fill = [0, 0, 0];
@@ -400,14 +319,8 @@ export async function extractPageGraphics(page, pageWidth, pageHeight, options =
       if (pending && options.shapes !== false) {
         const rgb = blendWhite(fill, alpha);
         for (const subpath of subpathsOf(pending.ops, pending.coords)) {
-          const rect = rgb ? fillRect(subpath, pending.matrix) : null;
-          if (rect) {
-            pushShape(shapes, clipRect(rect, clip), rgb, pageWidth, pageHeight);
-          } else if (wantsArt && alpha > 0.02) {
-            // Either the shape is not a rectangle (an icon, a logo, a chart
-            // wedge) or the fill is a pattern/gradient with no flat colour.
-            pushArt(artRegions, artBounds(subpath, pending.matrix), clip, pageWidth, pageHeight);
-          }
+          const rect = fillRect(subpath, pending.matrix);
+          if (rect) pushShape(shapes, clipRect(rect, clip), rgb, pageWidth, pageHeight);
         }
       }
       if (fn !== OPS.fill && fn !== OPS.eoFill) pending = null;
@@ -415,18 +328,8 @@ export async function extractPageGraphics(page, pageWidth, pageHeight, options =
       if (pending && options.shapes !== false) {
         const rgb = blendWhite(stroke, strokeAlpha);
         for (const subpath of subpathsOf(pending.ops, pending.coords)) {
-          const rects = rgb ? strokeRect(subpath, pending.matrix, lineWidth) : null;
-          if (rects) {
-            for (const rect of rects) pushShape(shapes, clipRect(rect, clip), rgb, pageWidth, pageHeight);
-          } else if (wantsArt && strokeAlpha > 0.02) {
-            const bounds = artBounds(subpath, pending.matrix);
-            const pad = Math.max(0.6, lineWidth * matrixScale(pending.matrix)) / 2;
-            pushArt(artRegions, {
-              minX: bounds.minX - pad,
-              minY: bounds.minY - pad,
-              maxX: bounds.maxX + pad,
-              maxY: bounds.maxY + pad,
-            }, clip, pageWidth, pageHeight);
+          for (const rect of strokeRect(subpath, pending.matrix, lineWidth) || []) {
+            pushShape(shapes, clipRect(rect, clip), rgb, pageWidth, pageHeight);
           }
         }
       }
@@ -435,35 +338,13 @@ export async function extractPageGraphics(page, pageWidth, pageHeight, options =
       if (pending) {
         let box = null;
         for (const subpath of subpathsOf(pending.ops, pending.coords)) {
-          const bounds = artBounds(subpath, pending.matrix);
+          const bounds = boundsOf(subpath.points, pending.matrix);
           box = box
             ? { minX: Math.min(box.minX, bounds.minX), minY: Math.min(box.minY, bounds.minY), maxX: Math.max(box.maxX, bounds.maxX), maxY: Math.max(box.maxY, bounds.maxY) }
             : { minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY };
         }
         if (box) clip = intersect(box, clip);
       }
-    } else if (fn === OPS.shadingFill) {
-      // A gradient paints the whole active clip; there is no flat colour to
-      // approximate, so the patch is rasterised.
-      if (wantsArt && clip) pushArt(artRegions, clip, null, pageWidth, pageHeight);
-      pending = null;
-    } else if (
-      fn === OPS.paintImageMaskXObject
-      || fn === OPS.paintImageMaskXObjectGroup
-      || fn === OPS.paintImageMaskXObjectRepeat
-    ) {
-      // Stencil masks carry most vector icons and scanned signatures. Their
-      // pixels are the fill colour, which no rectangle can express.
-      // A group draws several stamps, each with its own transform.
-      const stamps = fn === OPS.paintImageMaskXObjectGroup && Array.isArray(args[0])
-        ? args[0].map((entry) => (
-          Array.isArray(entry?.transform) ? multiply(entry.transform.map(Number), matrix) : matrix
-        ))
-        : [matrix];
-      if (wantsArt) {
-        for (const stamp of stamps) pushArt(artRegions, unitBounds(stamp), clip, pageWidth, pageHeight);
-      }
-      pending = null;
     } else if (fn === OPS.endPath) {
       pending = null;
     } else if (fn === OPS.beginText) {
@@ -494,7 +375,7 @@ export async function extractPageGraphics(page, pageWidth, pageHeight, options =
     }
   }
 
-  return { shapes, textColors, artRegions: mergeArt(artRegions) };
+  return { shapes, textColors };
 }
 
 /**

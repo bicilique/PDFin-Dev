@@ -129,16 +129,20 @@ function RunBox({ run, change, selected, interactive, pageHeight, background, on
 
   const font = runFont(run, pageHeight);
   const color = run.color || "var(--text-heading)";
+  const fontSize = Math.max(5, (rect.h * pageHeight) / EM_BOX);
+  const value = change ? change.text : run.text;
+  const expandedSize = {
+    width: `${Math.ceil(value.length * fontSize * 0.58)}px`,
+    minWidth: `${rect.w * 100}%`,
+    maxWidth: `${(1 - rect.x) * 100}%`,
+  };
 
   // The selected run becomes a real input placed over the words themselves, so
   // the next keystroke lands in the document instead of in a side panel.
   if (selected && interactive) {
-    const value = change ? change.text : run.text;
     // Longer replacements grow the field rather than scrolling inside it, so
     // what you typed stays readable; the export squeezes it back to the run's
     // own width when "keep the original width" is on.
-    const fontSize = Math.max(5, (rect.h * pageHeight) / EM_BOX);
-    const roomy = Math.ceil(value.length * fontSize * 0.58);
     return (
       <input
         type="text"
@@ -149,8 +153,7 @@ function RunBox({ run, change, selected, interactive, pageHeight, background, on
         onKeyDown={onKeyDown}
         style={{
           ...base,
-          width: `max(${rect.w * 100}%, ${roomy}px)`,
-          maxWidth: `${(1 - rect.x) * 100}%`,
+          ...expandedSize,
           font,
           color,
           background: background || "var(--color-pdf-page)",
@@ -168,6 +171,7 @@ function RunBox({ run, change, selected, interactive, pageHeight, background, on
   return (
     <button type="button" onClick={onSelect} aria-label={run.text} tabIndex={interactive ? 0 : -1} style={{
       ...base,
+      ...(change ? expandedSize : null),
       cursor: "text",
       textAlign: "left",
       whiteSpace: "pre",

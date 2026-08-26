@@ -679,6 +679,9 @@ TOOL_DEFS.edit = {
             editingId: null,
           })} />
         </Field>
+        <Alert tone="warning">{TX(lang,
+          "Gunakan fitur edit PDF dengan bijak. Pastikan Anda berhak mengubah dokumen ini dan jangan menyalahgunakannya untuk memalsukan atau menyesatkan pihak lain.",
+          "Use Edit PDF responsibly. Make sure you have the right to modify this document, and do not misuse it to falsify or mislead others.")}</Alert>
         {mode === "content" && <TextEditControls lang={lang} opts={opts} setOpts={setOpts} />}
         {mode !== "content" && (
           <Alert tone="info">{TX(lang,

@@ -697,7 +697,10 @@ import { sanitizePdfBaseName, createNameDeduper } from "./outputName.js";
     const edits = {};
     for (const change of opts.changes || []) {
       if (!edits[change.fileId]) edits[change.fileId] = {};
-      edits[change.fileId][`${change.srcIndex}:${change.opIndex}`] = change.text;
+      edits[change.fileId][`${change.srcIndex}:${change.opIndex}`] = {
+        text: change.text,
+        offset: change.offset,
+      };
     }
     const { applyTextEdits } = await import("./pdfTextEdit.js");
     return applyTextEdits(files, { ...opts, edits }, onProgress);

@@ -3,6 +3,7 @@ import { Alert, Button, Input, Select, Switch } from "../../../components/index.
 import { Field, Segmented, SliderRow, TX, TOOL_DEFS, getOutputNameError, getPdfOutputName, outputNameValue, OutputNameField } from "./tools-1.jsx";
 import { TextEditControls, TextRunLayer, clearTextRunCache } from "./tools-7.jsx";
 import { PdfProcess } from "../engine/pdfProcess.js";
+import { editorSnapshot, redoEditor, undoEditor } from "./editorHistory.js";
 
 // PDFin workspace — tool defs part 5: the PDF editor.
 //
@@ -110,33 +111,17 @@ function commit(opts, setOpts, nextObjects, patch = {}) {
     ...opts,
     ...patch,
     objects: nextObjects,
-    past: [...(opts.past || []), opts.objects || []].slice(-40),
+    past: [...(opts.past || []), editorSnapshot(opts)].slice(-40),
     future: [],
   });
 }
 
 function undo(opts, setOpts) {
-  const past = opts.past || [];
-  if (!past.length) return;
-  setOpts({
-    ...opts,
-    objects: past[past.length - 1],
-    past: past.slice(0, -1),
-    future: [...(opts.future || []), opts.objects || []],
-    selectedId: null,
-  });
+  setOpts(undoEditor(opts));
 }
 
 function redo(opts, setOpts) {
-  const future = opts.future || [];
-  if (!future.length) return;
-  setOpts({
-    ...opts,
-    objects: future[future.length - 1],
-    past: [...(opts.past || []), opts.objects || []],
-    future: future.slice(0, -1),
-    selectedId: null,
-  });
+  setOpts(redoEditor(opts));
 }
 
 function updateObject(opts, setOpts, id, updater, { history = true } = {}) {
@@ -638,7 +623,10 @@ TOOL_DEFS.edit = {
   },
   // The preview only has to be re-announced when the document actually changes,
   // not on every style tweak or selection.
-  previewKey: (opts) => `${(opts.objects || []).length}:${(opts.changes || []).map((change) => `${change.fileId}:${change.srcIndex}:${change.opIndex}=${change.text}`).join("|")}`,
+  previewKey: (opts) => `${(opts.objects || []).length}:${(opts.changes || []).map((change) => {
+    const offset = change.offset || { x: 0, y: 0 };
+    return `${change.fileId}:${change.srcIndex}:${change.opIndex}=${change.text}@${offset.x},${offset.y}`;
+  }).join("|")}`,
   Panel: ({ lang, opts, setOpts, ctx }) => {
     const imageRef = React.useRef(null);
     const file = ctx.files[0];

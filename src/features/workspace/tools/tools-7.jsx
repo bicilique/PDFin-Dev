@@ -1,6 +1,8 @@
 import React from "react";
+import { IconArrowsMove } from "@tabler/icons-react";
 import { Alert, Button, Switch } from "../../../components/index.js";
 import { Field, TX } from "./tools-1.jsx";
+import { redoEditor, undoEditor } from "./editorHistory.js";
 
 // PDFin workspace — editing the text already inside a PDF.
 //
@@ -53,12 +55,36 @@ function findChange(opts, run) {
 // Applies (or clears) the replacement text of one run.
 export function commitRunText(setOpts, run, text) {
   setOpts((current) => {
+    const existing = findChange(current, run);
     const rest = (current.changes || []).filter((change) => changeKey(change) !== run.id);
-    const next = text === run.text
+    const moved = Math.abs(existing?.offset?.x || 0) > 1e-6 || Math.abs(existing?.offset?.y || 0) > 1e-6;
+    const next = text === run.text && !moved
       ? rest
-      : [...rest, { fileId: run.fileId, srcIndex: run.srcIndex, opIndex: run.opIndex, original: run.text, text }];
+      : [...rest, {
+        fileId: run.fileId,
+        srcIndex: run.srcIndex,
+        opIndex: run.opIndex,
+        original: run.text,
+        text,
+        ...(moved ? { offset: existing.offset } : null),
+      }];
     return { ...current, changes: next };
   });
+}
+
+function withRunOffset(changes, run, offset) {
+  const existing = changes.find((change) => changeKey(change) === run.id);
+  const rest = changes.filter((change) => changeKey(change) !== run.id);
+  const moved = Math.abs(offset.x) > 1e-6 || Math.abs(offset.y) > 1e-6;
+  if (!moved && (!existing || existing.text === run.text)) return rest;
+  return [...rest, {
+    fileId: run.fileId,
+    srcIndex: run.srcIndex,
+    opIndex: run.opIndex,
+    original: run.text,
+    text: existing?.text ?? run.text,
+    ...(moved ? { offset } : null),
+  }];
 }
 
 // The engine reports run heights as the full em box (ascent to descent), so the
@@ -107,12 +133,14 @@ function runFont(run, pageHeight) {
   return `${run.style?.italic ? "italic " : ""}${weight} ${fontSize}px/1 ${family}`;
 }
 
-function RunBox({ run, change, selected, interactive, pageHeight, background, onSelect, onChange, onKeyDown, lang }) {
+function RunBox({ run, change, selected, interactive, pageHeight, background, onSelect, onChange, onKeyDown, onDragStart, lang }) {
   const rect = run.rect;
+  const offset = change?.offset || { x: 0, y: 0 };
+  const percent = (value) => `${Number((value * 100).toFixed(6))}%`;
   const base = {
     position: "absolute",
-    left: `${rect.x * 100}%`,
-    top: `${rect.y * 100}%`,
+    left: percent(rect.x + offset.x),
+    top: percent(rect.y + offset.y),
     width: `${rect.w * 100}%`,
     height: `${rect.h * 100}%`,
     padding: 0,
@@ -144,35 +172,52 @@ function RunBox({ run, change, selected, interactive, pageHeight, background, on
     // what you typed stays readable; the export squeezes it back to the run's
     // own width when "keep the original width" is on.
     return (
-      <input
-        type="text"
-        autoFocus
-        value={value}
-        aria-label={TX(lang, `Ubah teks: ${run.text}`, `Edit text: ${run.text}`)}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onKeyDown}
-        style={{
-          ...base,
-          ...expandedSize,
-          font,
-          color,
-          background: background || "var(--color-pdf-page)",
-          border: "1.5px solid var(--border-brand)",
-          borderRadius: 2,
-          outline: "none",
-          pointerEvents: "auto",
-          whiteSpace: "pre",
-          overflow: "hidden",
-        }}
-      />
+      <div style={{ ...base, ...expandedSize, pointerEvents: "auto" }}>
+        <input
+          type="text"
+          autoFocus
+          value={value}
+          aria-label={TX(lang, `Ubah teks: ${run.text}`, `Edit text: ${run.text}`)}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          style={{
+            width: "100%",
+            height: "100%",
+            padding: "0 20px 0 0",
+            boxSizing: "border-box",
+            font,
+            color,
+            background: background || "var(--color-pdf-page)",
+            border: "1.5px solid var(--border-brand)",
+            borderRadius: 2,
+            outline: "none",
+            whiteSpace: "pre",
+            overflow: "hidden",
+          }}
+        />
+        <button type="button" aria-label={TX(lang, "Geser teks", "Move text")}
+          onPointerDown={(event) => onDragStart(event, event.currentTarget.parentElement)}
+          title={TX(lang, "Geser teks", "Move text")}
+          style={{
+            position: "absolute", top: "50%", right: 2, width: 16, height: 16,
+            transform: "translateY(-50%)",
+            display: "grid", placeItems: "center", padding: 0,
+            color: "var(--text-brand)", background: "var(--surface-card)",
+            border: "1px solid var(--border-brand)", borderRadius: 2,
+            cursor: "grab", touchAction: "none",
+          }}>
+          <IconArrowsMove size={11} stroke={2} aria-hidden="true" />
+        </button>
+      </div>
     );
   }
 
   return (
-    <button type="button" onClick={onSelect} aria-label={run.text} tabIndex={interactive ? 0 : -1} style={{
+    <button type="button" onClick={onSelect} onPointerDown={onDragStart} aria-label={run.text} tabIndex={interactive ? 0 : -1} style={{
       ...base,
       ...(change ? expandedSize : null),
-      cursor: "text",
+      cursor: change ? "grab" : "text",
+      touchAction: "none",
       textAlign: "left",
       whiteSpace: "pre",
       overflow: "hidden",
@@ -199,6 +244,8 @@ export function TextRunLayer({ page, opts, setOpts, lang, interactive = true }) 
   const [runs, setRuns] = React.useState([]);
   const [height, setHeight] = React.useState(0);
   const [visible, setVisible] = React.useState(false);
+  const drag = React.useRef(null);
+  const suppressClick = React.useRef(null);
 
   const pageChanges = (opts.changes || []).filter((change) => change.fileId === page.fileId && change.srcIndex === page.srcIndex);
   // Pages far from the viewport are never parsed, and a page nobody can edit
@@ -273,6 +320,61 @@ export function TextRunLayer({ page, opts, setOpts, lang, interactive = true }) 
     }
   };
 
+  const startDrag = (run) => (event, dragElement = event.currentTarget) => {
+    if (!interactive || (event.button !== undefined && event.button !== 0)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const layerBox = ref.current?.getBoundingClientRect();
+    const elementBox = dragElement.getBoundingClientRect();
+    if (!layerBox?.width || !layerBox?.height) return;
+    const initial = findChange(opts, run)?.offset || { x: 0, y: 0 };
+    drag.current = {
+      run,
+      startX: event.clientX,
+      startY: event.clientY,
+      initial,
+      initialChanges: opts.changes || [],
+      initialObjects: opts.objects || [],
+      minX: -run.rect.x,
+      maxX: Math.max(-run.rect.x, 1 - run.rect.x - elementBox.width / layerBox.width),
+      minY: -run.rect.y,
+      maxY: Math.max(-run.rect.y, 1 - run.rect.y - elementBox.height / layerBox.height),
+      layerWidth: layerBox.width,
+      layerHeight: layerBox.height,
+      moved: false,
+    };
+
+    const move = (moveEvent) => {
+      const active = drag.current;
+      if (!active || (moveEvent.pointerId !== undefined && event.pointerId !== undefined && moveEvent.pointerId !== event.pointerId)) return;
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const offset = {
+        x: Number(clamp(active.initial.x + (moveEvent.clientX - active.startX) / active.layerWidth, active.minX, active.maxX).toFixed(6)),
+        y: Number(clamp(active.initial.y + (moveEvent.clientY - active.startY) / active.layerHeight, active.minY, active.maxY).toFixed(6)),
+      };
+      active.moved = active.moved || Math.abs(offset.x - active.initial.x) > 1e-6 || Math.abs(offset.y - active.initial.y) > 1e-6;
+      setOpts((current) => ({ ...current, changes: withRunOffset(current.changes || [], run, offset) }));
+    };
+
+    const finish = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      const active = drag.current;
+      drag.current = null;
+      if (!active?.moved) return;
+      suppressClick.current = run.id;
+      setTimeout(() => { if (suppressClick.current === run.id) suppressClick.current = null; }, 0);
+      setOpts((current) => ({
+        ...current,
+        past: [...(current.past || []), { objects: active.initialObjects, changes: active.initialChanges }].slice(-40),
+        future: [],
+      }));
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+  };
+
   return (
     <div ref={ref} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {runs.map((run) => {
@@ -283,9 +385,13 @@ export function TextRunLayer({ page, opts, setOpts, lang, interactive = true }) 
             background={backgroundFor(run, selected && interactive)}
             selected={selected}
             interactive={interactive}
-            onSelect={() => setOpts((current) => ({ ...current, selectedId: run.id, selectedRun: run }))}
+            onSelect={() => {
+              if (suppressClick.current === run.id) return;
+              setOpts((current) => ({ ...current, selectedId: run.id, selectedRun: run }));
+            }}
             onChange={(text) => commitRunText(setOpts, run, text)}
-            onKeyDown={onKeyDown(run)} />
+            onKeyDown={onKeyDown(run)}
+            onDragStart={startDrag(run)} />
         );
       })}
     </div>
@@ -350,6 +456,10 @@ export function TextEditControls({ lang, opts, setOpts }) {
         onChange={(fitWidth) => setOpts((current) => ({ ...current, fitWidth }))} />
       <Field label={TX(lang, "Perubahan teks", "Text changes")}>
         <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+          <Button variant="ghost" size="sm" disabled={!(opts.past || []).length}
+            onClick={() => setOpts((current) => undoEditor(current))}>{TX(lang, "Urungkan", "Undo")}</Button>
+          <Button variant="ghost" size="sm" disabled={!(opts.future || []).length}
+            onClick={() => setOpts((current) => redoEditor(current))}>{TX(lang, "Ulangi", "Redo")}</Button>
           <Button variant="ghost" size="sm" disabled={!changes.length}
             onClick={() => setOpts((current) => ({ ...current, changes: [], selectedId: null, selectedRun: null }))}>
             {TX(lang, "Kosongkan", "Clear")}

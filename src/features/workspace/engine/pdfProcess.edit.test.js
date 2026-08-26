@@ -35,6 +35,14 @@ async function textOf(blob) {
   return content.items.map((item) => item.str).join(" ");
 }
 
+async function itemsOf(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const doc = await pdfjsLib.getDocument({ data: bytes, useWorkerFetch: false, isEvalSupported: false }).promise;
+  const page = await doc.getPage(1);
+  const content = await page.getTextContent();
+  return content.items;
+}
+
 const textObject = {
   id: "o1", fileId: "e-1", srcIndex: 0, type: "text",
   rect: { x: 0.1, y: 0.6, w: 0.6, h: 0.1 },
@@ -73,6 +81,37 @@ describe("PdfProcess.editDocument", () => {
 
     expect(result.sameFont).toBe(1);
     expect(await textOf(result.outputs[0].blob)).toContain("Harga baru");
+  });
+
+  it("exports a text replacement at its dragged preview position", async () => {
+    seedFile("e-1", "surat.pdf", await makePdf());
+    const change = await changeFor("e-1", "Harga baru");
+    const result = await PdfProcess.editDocument([{ id: "e-1", name: "surat.pdf" }], {
+      changes: [{ ...change, offset: { x: 0.1, y: 0.1 } }],
+      objects: [],
+      outputName: "hasil-edit",
+    });
+
+    const items = await itemsOf(result.outputs[0].blob);
+    const edited = items.find((item) => item.str.includes("Harga baru"));
+    expect(edited.transform[4]).toBeCloseTo(80, 1);
+    expect(edited.transform[5]).toBeCloseTo(170, 1);
+  });
+
+  it("exports a dragged position even when the text itself is unchanged", async () => {
+    seedFile("e-1", "surat.pdf", await makePdf());
+    const change = await changeFor("e-1", "Harga lama");
+    const result = await PdfProcess.editDocument([{ id: "e-1", name: "surat.pdf" }], {
+      changes: [{ ...change, offset: { x: 0.1, y: 0.1 } }],
+      objects: [],
+      outputName: "hasil-edit",
+    });
+
+    const items = await itemsOf(result.outputs[0].blob);
+    const moved = items.find((item) => item.str.includes("Harga lama"));
+    expect(moved.transform[4]).toBeCloseTo(80, 1);
+    expect(moved.transform[5]).toBeCloseTo(170, 1);
+    expect(result.sameFont).toBe(1);
   });
 
   it("only draws objects when no text was changed", async () => {

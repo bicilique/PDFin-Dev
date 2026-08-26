@@ -28,6 +28,7 @@ import {
   multiply,
   textRenderingMatrix,
   userToVisibleMatrix,
+  visibleToUserMatrix,
   visibleSize,
 } from "./pdfGeometry.js";
 
@@ -552,6 +553,24 @@ function planReplacement(run, newText, { fitWidth }) {
   return { source: `${prefix}[${compensation}] TJ`, kind: "redraw" };
 }
 
+function userOffset(page, offset) {
+  const x = Number(offset?.x) || 0;
+  const y = Number(offset?.y) || 0;
+  if (!x && !y) return [0, 0];
+  const size = page.getSize();
+  const visible = visibleSize(size.width, size.height, page.getRotation().angle || 0);
+  const matrix = visibleToUserMatrix(size.width, size.height, visible.angle);
+  const dx = x * visible.width;
+  const dy = -y * visible.height;
+  return [matrix[0] * dx + matrix[2] * dy, matrix[1] * dx + matrix[3] * dy];
+}
+
+function translateSource(source, offset) {
+  const [dx, dy] = offset;
+  if (!dx && !dy) return source;
+  return `q 1 0 0 1 ${Number(dx.toFixed(4))} ${Number(dy.toFixed(4))} cm ${source} Q`;
+}
+
 /**
  * Applies text edits to the given files.
  *
@@ -584,7 +603,10 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
       const [srcIndex, opIndex] = key.split(":").map(Number);
       if (!Number.isFinite(srcIndex) || !Number.isFinite(opIndex)) continue;
       if (!byPage.has(srcIndex)) byPage.set(srcIndex, []);
-      byPage.get(srcIndex).push({ opIndex, text: fileEdits[key] });
+      const value = fileEdits[key];
+      byPage.get(srcIndex).push(typeof value === "object" && value !== null
+        ? { opIndex, text: value.text, offset: value.offset }
+        : { opIndex, text: value });
     }
 
     for (const [srcIndex, pageEdits] of byPage) {
@@ -601,14 +623,16 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
 
       for (const edit of pageEdits) {
         const run = runByOp.get(edit.opIndex);
-        if (!run || !run.editable || edit.text === run.text) {
+        const moved = Math.abs(Number(edit.offset?.x) || 0) > 1e-6 || Math.abs(Number(edit.offset?.y) || 0) > 1e-6;
+        if (!run || !run.editable || (edit.text === run.text && !moved)) {
           if (run && edit.text !== run.text) skipped += 1;
           continue;
         }
         // The run's own font is tried with the text exactly as typed; only the
         // redraw path has to fall back to what a substitute font can carry.
         const plan = planReplacement(run, edit.text, { fitWidth });
-        replacements.set(edit.opIndex, plan.source);
+        const offset = userOffset(page, edit.offset);
+        replacements.set(edit.opIndex, translateSource(plan.source, offset));
         // A merged run owns several operators: the first carries the new text,
         // the rest are emptied while keeping the advance they contributed.
         for (const member of (run.members || []).slice(1)) {
@@ -618,7 +642,7 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
           sameFont += 1;
         } else {
           redrawn += 1;
-          redraws.push({ run, rawText: edit.text });
+          redraws.push({ run, rawText: edit.text, offset });
         }
       }
 
@@ -627,7 +651,7 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
         page.node.set(PDFName.of("Contents"), doc.context.register(doc.context.flateStream(rewritten)));
       }
 
-      for (const { run, rawText } of redraws) {
+      for (const { run, rawText, offset } of redraws) {
         const description = run.context.description;
         const standardFont = fallbackFontFor(description);
         const { font, text, dropped } = await resolveTextFont(
@@ -652,13 +676,14 @@ export async function applyTextEdits(files, opts = {}, onProgress) {
         const naturalWidth = font.widthOfTextAtSize(text, size) * run.xScale;
         const squeeze = fitWidth && run.advance > 0 && naturalWidth > run.advance ? run.advance / naturalWidth : 1;
         const horizontal = run.xScale * squeeze;
+        const origin = [run.origin[0] + offset[0], run.origin[1] + offset[1]];
         // Scale horizontally around the run origin so the baseline start and
         // the glyph height both stay exactly where the original text was.
         page.pushOperators(
           pushGraphicsState(),
-          concatTransformationMatrix(horizontal, 0, 0, 1, run.origin[0] * (1 - horizontal), 0)
+          concatTransformationMatrix(horizontal, 0, 0, 1, origin[0] * (1 - horizontal), 0)
         );
-        page.drawText(text, { x: run.origin[0], y: run.origin[1], size, font, color: run.fill });
+        page.drawText(text, { x: origin[0], y: origin[1], size, font, color: run.fill });
         page.pushOperators(popGraphicsState());
       }
     }

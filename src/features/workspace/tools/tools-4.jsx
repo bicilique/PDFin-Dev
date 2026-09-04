@@ -100,7 +100,37 @@ function PreviewList({ block, depth = 0 }) {
   );
 }
 
-function PreviewBlock({ block }) {
+function MermaidDiagram({ source, lang }) {
+  const [state, setState] = React.useState({ svg: "", error: false });
+  React.useEffect(() => {
+    let active = true;
+    setState({ svg: "", error: false });
+    import("../engine/mermaidRenderer.js")
+      .then(({ renderMermaidSvg }) => renderMermaidSvg(source))
+      .then((svg) => { if (active) setState({ svg, error: false }); })
+      .catch(() => { if (active) setState({ svg: "", error: true }); });
+    return () => { active = false; };
+  }, [source]);
+
+  return (
+    <figure aria-label={TX(lang, "Diagram Mermaid", "Mermaid diagram")} style={{ margin: "0 0 12px", overflowX: "auto", textAlign: "center" }}>
+      {state.svg ? (
+        <div style={{ display: "inline-block", maxWidth: "100%" }} dangerouslySetInnerHTML={{ __html: state.svg }} />
+      ) : state.error ? (
+        <div style={{ textAlign: "left" }}>
+          <p role="alert" style={{ margin: "0 0 6px", color: "var(--status-error-fg)", font: "var(--type-caption)" }}>
+            {TX(lang, "Sintaks Mermaid tidak valid. Source ditampilkan sebagai fallback.", "Invalid Mermaid syntax. Showing the source as a fallback.")}
+          </p>
+          <pre style={{ margin: 0, padding: "10px 12px", overflowX: "auto", background: INK.codeBg, border: `1px solid ${INK.codeBorder}`, color: INK.codeText, borderRadius: "var(--radius-md)", font: "0.86em/1.55 var(--font-mono)", whiteSpace: "pre" }}><code>{source}</code></pre>
+        </div>
+      ) : (
+        <span style={{ color: INK.muted, font: "var(--type-caption)" }}>{TX(lang, "Merender diagram…", "Rendering diagram…")}</span>
+      )}
+    </figure>
+  );
+}
+
+function PreviewBlock({ block, lang }) {
   if (block.type === "heading") {
     const Tag = `h${block.level}`;
     return (
@@ -126,7 +156,7 @@ function PreviewBlock({ block }) {
         margin: "0 0 10px", padding: "2px 0 2px 14px", borderLeft: `3px solid ${INK.quoteBar}`,
         color: INK.muted,
       }}>
-        {block.blocks.map((child, index) => <PreviewBlock key={index} block={child} />)}
+        {block.blocks.map((child, index) => <PreviewBlock key={index} block={child} lang={lang} />)}
       </blockquote>
     );
   }
@@ -138,6 +168,9 @@ function PreviewBlock({ block }) {
         borderRadius: "var(--radius-md)", font: "0.86em/1.55 var(--font-mono)", whiteSpace: "pre",
       }}><code>{block.text}</code></pre>
     );
+  }
+  if (block.type === "mermaid") {
+    return <MermaidDiagram source={block.text} lang={lang} />;
   }
   if (block.type === "list") {
     return <PreviewList block={block} />;
@@ -189,7 +222,7 @@ function MarkdownPage({ blocks, lang, baseFontSize, width = 680 }) {
       overflowWrap: "break-word", colorScheme: "light",
     }}>
       {blocks.length
-        ? blocks.map((block, index) => <PreviewBlock key={index} block={block} />)
+        ? blocks.map((block, index) => <PreviewBlock key={index} block={block} lang={lang} />)
         : (
           <p style={{ color: INK.muted, font: "var(--type-body-sm)", textAlign: "center", margin: "40px 0" }}>
             {TX(lang, "Pratinjau dokumen akan muncul di sini saat Anda menulis.", "The document preview appears here as you write.")}
@@ -505,8 +538,8 @@ TOOL_DEFS.md2pdf = {
       <OutputNameField lang={lang} value={opts.outputName} inputId="md2pdf-output-name"
         onChange={(outputName) => setOpts({ ...opts, outputName })} />
       <Alert tone="info">{TX(lang,
-        "Gambar dari tautan tidak dimuat demi privasi; teks alternatifnya yang ditampilkan.",
-        "Linked images are not fetched for privacy; their alt text is shown instead.")}</Alert>
+        "Diagram dalam blok ```mermaid dirender secara lokal. Gambar dari tautan tidak dimuat demi privasi; teks alternatifnya yang ditampilkan.",
+        "Diagrams in ```mermaid blocks are rendered locally. Linked images are not fetched for privacy; their alt text is shown instead.")}</Alert>
     </div>
   ),
   disabled: (ctx, opts, lang = "id") => !String(opts.markdown || "").trim() || !!getOutputNameError(opts.outputName, lang),

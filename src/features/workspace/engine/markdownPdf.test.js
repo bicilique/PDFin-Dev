@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName } from "pdf-lib";
 import { MARKDOWN_SAMPLE } from "./markdownEngine.js";
 import { markdownToPdf, toWinAnsi } from "./markdownPdf.js";
+import { solidPng } from "./solidPng.js";
 
 async function loadOutput(result) {
   const bytes = new Uint8Array(await result.outputs[0].blob.arrayBuffer());
@@ -80,5 +81,17 @@ describe("markdownToPdf", () => {
     const doc = await loadOutput(result);
     const annots = doc.getPage(0).node.Annots();
     expect(annots?.size()).toBeGreaterThanOrEqual(1);
+  });
+
+  it("embeds a rendered Mermaid diagram as an image", async () => {
+    const result = await markdownToPdf("```mermaid\nflowchart LR\n  A --> B\n```", {
+      outputName: "diagram.pdf",
+      renderMermaid: async () => ({ pngBytes: solidPng("5518B4"), width: 600, height: 240 }),
+    });
+    const doc = await loadOutput(result);
+    const resources = doc.getPage(0).node.Resources();
+    const xObjects = resources?.lookup(PDFName.of("XObject"));
+
+    expect(xObjects?.keys().length || 0).toBeGreaterThanOrEqual(1);
   });
 });

@@ -102,7 +102,7 @@ const toolSeoCopy = {
     howItWorks: ["Tulis, tempel, atau buka file Markdown.", "Periksa hasilnya lewat pratinjau langsung.", "Atur ukuran halaman lalu unduh PDF."],
     faq: [
       ["Apakah teks saya diunggah?", "Tidak. Markdown diubah menjadi PDF langsung di browser Anda."],
-      ["Sintaks Markdown apa yang didukung?", "Judul, teks tebal dan miring, daftar, tabel, kutipan, blok kode, tautan, dan garis pemisah."],
+      ["Sintaks Markdown apa yang didukung?", "Judul, teks tebal dan miring, daftar, tabel, kutipan, blok kode, diagram Mermaid, tautan, dan garis pemisah."],
     ],
   },
   pagenum: {

@@ -35,6 +35,11 @@ describe("parseMarkdown blocks", () => {
     expect(blocks).toEqual([{ type: "code", lang: "js", text: "const a = **not bold**;\n\n  indented" }]);
   });
 
+  it("recognizes Mermaid fences as diagram blocks", () => {
+    const blocks = parseMarkdown("```mermaid\nflowchart LR\n  A --> B\n```");
+    expect(blocks).toEqual([{ type: "mermaid", text: "flowchart LR\n  A --> B" }]);
+  });
+
   it("parses blockquotes recursively", () => {
     const blocks = parseMarkdown("> Kutipan **penting**\n> baris kedua");
     expect(blocks[0].type).toBe("quote");

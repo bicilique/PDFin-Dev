@@ -2,7 +2,7 @@
 // PDF layout engine so both render the same structure. No network, no dependencies.
 //
 // Supported blocks: ATX headings, paragraphs, ordered/unordered lists (nested,
-// task items), fenced code blocks, blockquotes, tables, horizontal rules.
+// task items), fenced code/Mermaid blocks, blockquotes, tables, horizontal rules.
 // Supported inline marks: bold, italic, inline code, strikethrough, links.
 // Images are intentionally rendered as their alt text: the preview must not
 // fetch remote resources (documents stay on the device).
@@ -37,7 +37,10 @@ function parseBlocks(lines) {
         i += 1;
       }
       i += 1; // closing fence (or end of input)
-      blocks.push({ type: "code", lang: fence[2] || "", text: body.join("\n") });
+      const lang = (fence[2] || "").toLowerCase();
+      blocks.push(lang === "mermaid"
+        ? { type: "mermaid", text: body.join("\n") }
+        : { type: "code", lang, text: body.join("\n") });
       continue;
     }
 
@@ -270,6 +273,14 @@ Semua pemrosesan terjadi *di perangkat Anda*.
 function halo(nama) {
   return "Halo, " + nama + "!";
 }
+\`\`\`
+
+### Alur kerja
+
+\`\`\`mermaid
+flowchart LR
+  A[Tulis Markdown] --> B[Periksa pratinjau]
+  B --> C[Buat PDF]
 \`\`\`
 
 ---

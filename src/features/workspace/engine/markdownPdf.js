@@ -56,7 +56,19 @@ export async function markdownToPdf(markdown, opts = {}, onProgress) {
   const writer = createWriter(doc, { pageW, pageH, margin, footer: opts.pageNumbers ? 18 : 0 });
   const total = Math.max(1, blocks.length);
   for (let i = 0; i < blocks.length; i += 1) {
-    drawBlock(writer, fonts, blocks[i], { x: margin, width: pageW - margin * 2, baseSize, quote: false });
+    const block = blocks[i];
+    const blockContext = { x: margin, width: pageW - margin * 2, baseSize, quote: false };
+    if (block.type === "mermaid") {
+      try {
+        const renderMermaid = opts.renderMermaid || renderMermaidLocally;
+        const rendered = await renderMermaid(block.text, { maxWidth: blockContext.width });
+        await drawMermaidBlock(doc, writer, rendered, blockContext, pageH - margin * 2 - (opts.pageNumbers ? 18 : 0));
+      } catch {
+        drawCodeBlock(writer, fonts, { ...block, type: "code", lang: "mermaid" }, blockContext);
+      }
+    } else {
+      drawBlock(writer, fonts, block, blockContext);
+    }
     if (i < blocks.length - 1) writer.space(blockSpacing(blocks[i], blocks[i + 1], baseSize));
     if (onProgress) onProgress(Math.min(92, ((i + 1) / total) * 92));
   }
@@ -83,6 +95,28 @@ export async function markdownToPdf(markdown, opts = {}, onProgress) {
   const blob = new Blob([bytes], { type: "application/pdf" });
   const name = opts.outputName || "markdown.pdf";
   return { outputs: [{ name, blob, size: blob.size, pages: doc.getPageCount() }] };
+}
+
+async function renderMermaidLocally(source, options) {
+  const { renderMermaidToPng } = await import("./mermaidRenderer.js");
+  return renderMermaidToPng(source, options);
+}
+
+async function drawMermaidBlock(doc, writer, rendered, ctx, maxHeight) {
+  const image = await doc.embedPng(rendered.pngBytes);
+  const sourceWidth = Math.max(1, Number(rendered.width) || image.width);
+  const sourceHeight = Math.max(1, Number(rendered.height) || image.height);
+  const scale = Math.min(1, ctx.width / sourceWidth, maxHeight / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  writer.ensure(height);
+  writer.consume(height);
+  writer.page.drawImage(image, {
+    x: ctx.x + (ctx.width - width) / 2,
+    y: writer.y,
+    width,
+    height,
+  });
 }
 
 function firstHeadingText(blocks) {

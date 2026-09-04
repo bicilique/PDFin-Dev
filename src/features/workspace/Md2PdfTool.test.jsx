@@ -57,6 +57,21 @@ describe("Markdown to PDF tool", () => {
     expect(screen.getByText(/\d+ kata · \d+ karakter/i)).toBeInTheDocument();
   });
 
+  it("renders a Mermaid fence as a diagram in the live preview", async () => {
+    SVGElement.prototype.getBBox ||= () => ({ x: 0, y: 0, width: 80, height: 20 });
+    SVGElement.prototype.getComputedTextLength ||= () => 80;
+    window.history.replaceState(null, "", "/#md2pdf");
+    render(<WorkspaceApp />);
+
+    fireEvent.change(screen.getByLabelText(/editor markdown/i), {
+      target: { value: "```mermaid\nflowchart LR\n  A --> B\n```" },
+    });
+
+    const diagram = await screen.findByLabelText(/diagram mermaid/i);
+    await waitFor(() => expect(diagram.querySelector("svg")).not.toBeNull());
+    expect(diagram.querySelector("pre")).toBeNull();
+  });
+
   it("creates a downloadable PDF from the editor content", async () => {
     window.history.replaceState(null, "", "/#md2pdf");
     render(<WorkspaceApp />);
